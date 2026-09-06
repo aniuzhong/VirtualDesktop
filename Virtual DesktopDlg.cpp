@@ -15,11 +15,8 @@ namespace
     const UINT EXIT_MENU_ID = 503;
     const UINT SEPARATOR_MENU_ID = 504;
 
-    typedef bool (*InstallHookFn)(void);
-
     HWND g_hDlg = nullptr;
     HINSTANCE g_hInstance = nullptr;
-    wil::unique_hmodule g_hookDll;
 
     HWND g_hDesktopList = nullptr;
     HWND g_hDesktopName = nullptr;
@@ -363,48 +360,6 @@ namespace
         }
     }
 
-    bool InstallHooks(void)
-    {
-        g_hookDll.reset(LoadLibraryW(L"Event Hooker Dll.dll"));
-        if (!g_hookDll)
-        {
-            MessageBoxW(g_hDlg, L"Failed to library.", TXT_MESSAGEBOX_TITLE, MB_ICONINFORMATION | MB_TOPMOST | MB_TASKMODAL);
-            return false;
-        }
-
-        InstallHookFn fpInstallHook = reinterpret_cast<InstallHookFn>(GetProcAddress(g_hookDll.get(), "InstallWinProcHook"));
-        if (fpInstallHook && !fpInstallHook())
-        {
-            MessageBoxW(g_hDlg, L"Failed to install hooks.", TXT_MESSAGEBOX_TITLE, MB_ICONINFORMATION | MB_TOPMOST | MB_TASKMODAL);
-            return false;
-        }
-
-        fpInstallHook = reinterpret_cast<InstallHookFn>(GetProcAddress(g_hookDll.get(), "InstallMessageHook"));
-        if (fpInstallHook && !fpInstallHook())
-        {
-            MessageBoxW(g_hDlg, L"Failed to install hooks.", TXT_MESSAGEBOX_TITLE, MB_ICONINFORMATION | MB_TOPMOST | MB_TASKMODAL);
-            return false;
-        }
-
-        return true;
-    }
-
-    void UninstallHooks(void)
-    {
-        if (!g_hookDll)
-            return;
-
-        InstallHookFn fpUninstallHook = reinterpret_cast<InstallHookFn>(GetProcAddress(g_hookDll.get(), "UnInstallMsgHook"));
-        if (!fpUninstallHook || !fpUninstallHook())
-            DebugPrintErrorMessage(L"Failed to uninstall Msg Hook.");
-
-        fpUninstallHook = reinterpret_cast<InstallHookFn>(GetProcAddress(g_hookDll.get(), "UnInstallWinProcHook"));
-        if (!fpUninstallHook || !fpUninstallHook())
-            DebugPrintErrorMessage(L"Failed to uninstall WinProc Hook.");
-
-        g_hookDll.reset();
-    }
-
     void OnInitDialog(HWND hDlg)
     {
         g_hDesktopList = GetDlgItem(hDlg, IDC_DESKTOP_LIST);
@@ -437,12 +392,6 @@ namespace
         if (!RegisterApplicationHotKeys())
         {
             MessageBoxW(hDlg, L"Failed to register Hot Keys.", TXT_MESSAGEBOX_TITLE, MB_ICONINFORMATION | MB_TOPMOST | MB_TASKMODAL);
-            PostQuitMessage(-1);
-            return;
-        }
-
-        if (!InstallHooks())
-        {
             PostQuitMessage(-1);
             return;
         }
@@ -523,7 +472,6 @@ namespace
 
         case WM_DESTROY:
             RemoveTrayIcon(hDlg);
-            UninstallHooks();
             g_hDlg = nullptr;
             break;
         }

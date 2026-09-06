@@ -15,6 +15,7 @@ set(WIL_BUILD_PACKAGING OFF)
 FetchContent_Declare(WIL
     GIT_REPOSITORY https://github.com/microsoft/wil
     GIT_TAG        v1.0.260126.7
+    GIT_SHALLOW    TRUE
 )
 FetchContent_MakeAvailable(WIL)
 
@@ -24,7 +25,6 @@ add_executable(VirtualDesktop WIN32
     RegSettings.cpp
     "Virtual Desktop.cpp"
     "Virtual DesktopDlg.cpp"
-    stdafx.cpp
     "Virtual Desktop.rc"
     "res/Virtual Desktop.ico"
 )
@@ -38,22 +38,3 @@ set_target_properties(VirtualDesktop PROPERTIES
 )
 
 set_property(TARGET VirtualDesktop PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
-
-add_library(EventHookerDll SHARED
-    "Event Hooker Dll/Event Hooker Dll.cpp"
-    "Event Hooker Dll/Global Functions.cpp"
-    "Event Hooker Dll/stdafx.cpp"
-    "Event Hooker Dll/Event Hooker Dll.rc"
-)
-target_include_directories(EventHookerDll PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/"Event Hooker Dll")
-target_precompile_headers(EventHookerDll PRIVATE "Event Hooker Dll/stdafx.h")
-target_compile_definitions(EventHookerDll PRIVATE UNICODE _UNICODE _WINDOWS _USRDLL)
-set_target_properties(EventHookerDll PROPERTIES
-    OUTPUT_NAME "Event Hooker Dll"
-)
-
-set_property(TARGET EventHookerDll PROPERTY LINK_FLAGS
-    "/DEF:\"${CMAKE_CURRENT_SOURCE_DIR}/Event Hooker Dll/Event Hooker Dll.def\"")
-set_property(TARGET EventHookerDll PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
-
-add_dependencies(VirtualDesktop EventHookerDll)

@@ -11,9 +11,7 @@
 #define IDC_DESKTOP_LIST                1001
 #define IDC_DESKTOP_NAME                1002
 #define IDC_ADD_NEW_DESKTOP             1003
-#define IDC_DELETE_DESKTOP              1004
 #define IDC_SWITCH_TO_DESKTOP           1005
-#define IDC_CHECK1                      1006
 #define IDC_VERIFY_CHECK                1006
 #define IDC_LAUNCH_APPLICATION          1007
 
