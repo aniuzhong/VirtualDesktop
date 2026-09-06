@@ -2,20 +2,19 @@
 
 std::wstring GetLastErrorMessage(void)
 {
-    LPWSTR pszBuffer = NULL;
+    wil::unique_hlocal buffer;
     FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-        NULL,
+        nullptr,
         GetLastError(),
         0,
-        reinterpret_cast<LPWSTR>(&pszBuffer),
+        reinterpret_cast<LPWSTR>(buffer.put()),
         0,
-        NULL);
+        nullptr);
 
     std::wstring errorMessage;
-    if (pszBuffer)
+    if (buffer)
     {
-        wil::unique_hlocal hBuffer(reinterpret_cast<HLOCAL>(pszBuffer));
-        errorMessage = pszBuffer;
+        errorMessage = static_cast<PWSTR>(buffer.get());
         while (!errorMessage.empty() && (errorMessage.back() == L'\n' || errorMessage.back() == L'\r'))
             errorMessage.pop_back();
     }
@@ -31,8 +30,7 @@ void DebugPrintErrorMessage(const wchar_t* pszErrorString)
         output += pszErrorString;
 
     if (iErrorNo)
-        output += L"\nError Number: " + std::to_wstring(iErrorNo)
-            + L"\nSystem Error Description: " + GetLastErrorMessage();
+        output += std::format(L"\nError Number: {}\nSystem Error Description: {}", iErrorNo, GetLastErrorMessage());
 
     OutputDebugStringW(output.c_str());
 }

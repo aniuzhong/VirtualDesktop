@@ -7,21 +7,21 @@
 #include <windows.h>
 #include <commctrl.h>
 #include <shellapi.h>
-#include <shlwapi.h>
-#include <tchar.h>
 
 #include <algorithm>
+#include <cwctype>
+#include <filesystem>
+#include <format>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <wil/resource.h>
 #include <wil/result.h>
 #include <wil/registry.h>
+#include <wil/win32_helpers.h>
 
 #include "CommonDef.h"
 
-#define ARRAY_SIZE 1024
-
 #pragma comment(linker, "/manifestdependency:\"type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
-#pragma comment(lib, "Shlwapi.lib")
 #pragma comment(lib, "Comctl32.lib")

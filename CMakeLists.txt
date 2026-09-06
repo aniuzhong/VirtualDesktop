@@ -32,6 +32,7 @@ target_include_directories(VirtualDesktop PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(VirtualDesktop PRIVATE WIL::WIL)
 target_precompile_headers(VirtualDesktop PRIVATE stdafx.h)
 target_compile_definitions(VirtualDesktop PRIVATE UNICODE _UNICODE _WINDOWS)
+target_compile_options(VirtualDesktop PRIVATE /W4)
 set_target_properties(VirtualDesktop PROPERTIES
     OUTPUT_NAME "Virtual Desktop"
     VS_GLOBAL_KEYWORD "Win32Proj"

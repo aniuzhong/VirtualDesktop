@@ -28,15 +28,26 @@ namespace
         return IsDlgButtonChecked(g_hDlg, IDC_VERIFY_CHECK) == BST_CHECKED;
     }
 
+    std::wstring GetControlText(HWND hWnd)
+    {
+        int iLength = GetWindowTextLengthW(hWnd) + 1;
+        std::wstring text(iLength, L'\0');
+        GetWindowTextW(hWnd, text.data(), iLength);
+        text.resize(wcslen(text.c_str()));
+        return text;
+    }
+
     std::wstring GetSelectedDesktopName(void)
     {
         int iSel = static_cast<int>(SendMessageW(g_hDesktopList, LB_GETCURSEL, 0, 0));
         if (LB_ERR == iSel)
             return std::wstring();
 
-        wchar_t szName[ARRAY_SIZE] = { 0 };
-        SendMessageW(g_hDesktopList, LB_GETTEXT, iSel, reinterpret_cast<LPARAM>(szName));
-        return szName;
+        int iLength = static_cast<int>(SendMessageW(g_hDesktopList, LB_GETTEXTLEN, iSel, 0));
+        std::wstring name(iLength + 1, L'\0');
+        SendMessageW(g_hDesktopList, LB_GETTEXT, iSel, reinterpret_cast<LPARAM>(name.data()));
+        name.resize(iLength);
+        return name;
     }
 
     void ShowAboutBox(void)
@@ -69,9 +80,9 @@ namespace
         nData.uFlags = NIF_ICON | NIF_TIP | NIF_MESSAGE;
 
         std::wstring tip = TXT_MESSAGEBOX_TITLE;
-        std::wstring currentDesktop = CDesktopManager::GetCurrentDesktopName();
+        std::wstring currentDesktop = DesktopManager::GetCurrentDesktopName();
         if (!currentDesktop.empty())
-            tip += L" [" + currentDesktop + L" Desktop]";
+            tip += std::format(L" [{} Desktop]", currentDesktop);
         wcsncpy_s(nData.szTip, tip.c_str(), _TRUNCATE);
 
         return Shell_NotifyIconW(NIM_ADD, &nData) != FALSE;
@@ -88,7 +99,7 @@ namespace
 
     bool RegisterApplicationHotKeys(void)
     {
-        int iDesktopCount = CDesktopManager::GetDesktopCount();
+        int iDesktopCount = DesktopManager::GetDesktopCount();
         for (int iCounter = 0; iCounter < iDesktopCount; iCounter++)
         {
             if (!RegisterHotKey(g_hDlg, BASE_HOT_KEY_ID + iCounter, MOD_CONTROL | MOD_SHIFT, L'1' + iCounter))
@@ -102,7 +113,7 @@ namespace
 
     bool UnRegisterApplicationHotKeys(void)
     {
-        int iDesktopCount = CDesktopManager::GetDesktopCount() - 1;
+        int iDesktopCount = DesktopManager::GetDesktopCount() - 1;
         bool bReturn = true;
         for (int iCounter = 0; iCounter < iDesktopCount; iCounter++)
         {
@@ -136,7 +147,7 @@ namespace
 
         SetForegroundWindow(g_hDlg);
 
-        if (CDesktopManager::IsCurrentDesktop(desktopName))
+        if (DesktopManager::IsCurrentDesktop(desktopName))
         {
             MessageBoxW(g_hDlg, L"You are currently on the same Desktop.", TXT_MESSAGEBOX_TITLE, MB_ICONINFORMATION | MB_TOPMOST | MB_TASKMODAL);
             return;
@@ -144,16 +155,15 @@ namespace
 
         if (IsVerifyChecked())
         {
-            std::wstring message = L"Are you sure to switch to '" + desktopName + L"' Desktop ?";
+            std::wstring message = std::format(L"Are you sure to switch to '{}' Desktop ?", desktopName);
             if (IDNO == MessageBoxW(g_hDlg, message.c_str(), TXT_MESSAGEBOX_TITLE, MB_YESNO | MB_ICONINFORMATION | MB_TOPMOST | MB_TASKMODAL))
                 return;
         }
 
-        if (CDesktopManager::SwitchDesktop(desktopName))
+        if (DesktopManager::SwitchDesktop(desktopName))
         {
-            wchar_t szAppName[ARRAY_SIZE] = { 0 };
-            GetModuleFileNameW(nullptr, szAppName, ARRAY_SIZE - 1);
-            CDesktopManager::LaunchApplication(szAppName, desktopName);
+            std::wstring appName = wil::GetModuleFileNameW(nullptr).get();
+            DesktopManager::LaunchApplication(appName, desktopName);
             UnRegisterApplicationHotKeys();
             PostQuitMessage(0);
         }
@@ -161,18 +171,17 @@ namespace
 
     void ShowManageDesktopsDialog(void)
     {
-        int iDeskCount = CDesktopManager::GetDesktopCount();
+        int iDeskCount = DesktopManager::GetDesktopCount();
         SendMessageW(g_hDesktopList, LB_RESETCONTENT, 0, 0);
         for (int i = 0; i < iDeskCount; i++)
         {
-            std::wstring name = CDesktopManager::GetDesktopName(i);
+            std::wstring name = DesktopManager::GetDesktopName(i);
             SendMessageW(g_hDesktopList, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(name.c_str()));
         }
 
-        wchar_t szSelectedDesktopName[ARRAY_SIZE] = { 0 };
-        GetWindowTextW(g_hDesktopName, szSelectedDesktopName, ARRAY_SIZE - 1);
+        std::wstring selectedDesktopName = GetControlText(g_hDesktopName);
 
-        if (szSelectedDesktopName[0] && LB_ERR != SendMessageW(g_hDesktopList, LB_SELECTSTRING, 0, reinterpret_cast<LPARAM>(szSelectedDesktopName)))
+        if (!selectedDesktopName.empty() && LB_ERR != SendMessageW(g_hDesktopList, LB_SELECTSTRING, 0, reinterpret_cast<LPARAM>(selectedDesktopName.c_str())))
             EnableWindow(g_hDesktopName, FALSE);
         else
         {
@@ -195,16 +204,11 @@ namespace
 
     void OnAddNewDesktop(void)
     {
-        wchar_t szCaption[ARRAY_SIZE] = { 0 };
-        GetWindowTextW(g_hAddNewDesktop, szCaption, ARRAY_SIZE - 1);
+        std::wstring caption = GetControlText(g_hAddNewDesktop);
 
-        if (_wcsicmp(szCaption, L"&New") != 0)
+        if (_wcsicmp(caption.c_str(), L"&New") != 0)
         {
-            std::wstring name = [&] {
-                wchar_t szName[ARRAY_SIZE] = { 0 };
-                GetWindowTextW(g_hDesktopName, szName, ARRAY_SIZE - 1);
-                return std::wstring(szName);
-            }();
+            std::wstring name = GetControlText(g_hDesktopName);
 
             size_t begin = name.find_first_not_of(L' ');
             name = (std::wstring::npos == begin) ? std::wstring() : name.substr(begin);
@@ -222,7 +226,7 @@ namespace
             if (LB_ERR != SendMessageW(g_hDesktopList, LB_SELECTSTRING, 0, reinterpret_cast<LPARAM>(name.c_str())))
                 MessageBoxW(g_hDlg, L"Desktop already created !", TXT_MESSAGEBOX_TITLE, MB_ICONEXCLAMATION | MB_TOPMOST | MB_TASKMODAL);
 
-            if (CDesktopManager::CreateDesktop(name))
+            if (DesktopManager::CreateDesktop(name))
             {
                 if (IDYES == MessageBoxW(g_hDlg, L"New Desktop is been created.\nWould you like to switch to new desktop ?", TXT_MESSAGEBOX_TITLE, MB_YESNO | MB_ICONINFORMATION | MB_TOPMOST | MB_TASKMODAL))
                     SwitchDesktopTo(name);
@@ -266,25 +270,26 @@ namespace
             return;
         }
 
-        wchar_t szFileName[ARRAY_SIZE] = { 0 };
+        std::wstring fileName(32768, L'\0');
         OPENFILENAMEW ofn = { 0 };
         ofn.lStructSize = sizeof(ofn);
         ofn.hwndOwner = g_hDlg;
         ofn.lpstrFilter = L"Applications (*.Exe)\0*.Exe\0";
-        ofn.lpstrFile = szFileName;
-        ofn.nMaxFile = ARRAY_SIZE;
+        ofn.lpstrFile = fileName.data();
+        ofn.nMaxFile = static_cast<DWORD>(fileName.size());
         ofn.Flags = OFN_HIDEREADONLY | OFN_OVERWRITEPROMPT;
 
         if (GetOpenFileNameW(&ofn))
         {
-            if (CDesktopManager::LaunchApplication(szFileName, desktopName))
+            fileName.resize(wcslen(fileName.c_str()));
+            if (DesktopManager::LaunchApplication(fileName, desktopName))
             {
-                std::wstring message = L"Application is launched into the Desktop '" + desktopName + L"'.";
+                std::wstring message = std::format(L"Application is launched into the Desktop '{}'.", desktopName);
                 MessageBoxW(g_hDlg, message.c_str(), TXT_MESSAGEBOX_TITLE, MB_ICONINFORMATION);
             }
             else
             {
-                std::wstring message = L"Failed to launch application into the Desktop '" + desktopName + L"'.";
+                std::wstring message = std::format(L"Failed to launch application into the Desktop '{}'.", desktopName);
                 MessageBoxW(g_hDlg, message.c_str(), TXT_MESSAGEBOX_TITLE, MB_ICONERROR);
             }
         }
@@ -292,9 +297,9 @@ namespace
 
     void OnHotKey(WPARAM wParam)
     {
-        int iDesktopCount = CDesktopManager::GetDesktopCount();
+        int iDesktopCount = DesktopManager::GetDesktopCount();
         int iDesktopIndex = iDesktopCount - (static_cast<int>(wParam) - BASE_HOT_KEY_ID) - 1;
-        std::wstring desktopName = CDesktopManager::GetDesktopName(iDesktopIndex);
+        std::wstring desktopName = DesktopManager::GetDesktopName(iDesktopIndex);
         if (!desktopName.empty())
             SwitchDesktopTo(desktopName);
     }
@@ -308,17 +313,17 @@ namespace
         POINT pt;
         GetCursorPos(&pt);
 
-        int iDesktopCount = CDesktopManager::GetDesktopCount();
+        int iDesktopCount = DesktopManager::GetDesktopCount();
         int iHotKeyCounter = iDesktopCount;
 
         wil::unique_hmenu hContextMenu(CreatePopupMenu());
 
         for (int iMenuItemCount = 0; iMenuItemCount < iDesktopCount; iMenuItemCount++)
         {
-            std::wstring desktopName = CDesktopManager::GetDesktopName(iMenuItemCount);
-            std::wstring menuItemName = desktopName + L"\tCtrl + Shift + " + std::to_wstring(iHotKeyCounter--);
+            std::wstring desktopName = DesktopManager::GetDesktopName(iMenuItemCount);
+            std::wstring menuItemName = std::format(L"{}\tCtrl + Shift + {}", desktopName, iHotKeyCounter--);
 
-            UINT flags = MF_STRING | MF_ENABLED | (CDesktopManager::IsCurrentDesktop(desktopName) ? MF_CHECKED : 0);
+            UINT flags = MF_STRING | MF_ENABLED | (DesktopManager::IsCurrentDesktop(desktopName) ? MF_CHECKED : 0);
             AppendMenuW(hContextMenu.get(), flags, CONTEXT_MENU_IDS + iMenuItemCount, menuItemName.c_str());
         }
 
@@ -354,7 +359,7 @@ namespace
             OnLaunchApplication();
         else if (iSelectedIndex >= static_cast<int>(CONTEXT_MENU_IDS))
         {
-            std::wstring desktopName = CDesktopManager::GetDesktopName(iSelectedIndex - CONTEXT_MENU_IDS);
+            std::wstring desktopName = DesktopManager::GetDesktopName(iSelectedIndex - CONTEXT_MENU_IDS);
             if (!desktopName.empty())
                 SwitchDesktopTo(desktopName);
         }
@@ -367,14 +372,16 @@ namespace
         g_hAddNewDesktop = GetDlgItem(hDlg, IDC_ADD_NEW_DESKTOP);
         g_hSwitchToDesktop = GetDlgItem(hDlg, IDC_SWITCH_TO_DESKTOP);
 
-        wchar_t szAboutMenu[ARRAY_SIZE] = { 0 };
-        if (LoadStringW(g_hInstance, IDS_ABOUTBOX, szAboutMenu, ARRAY_SIZE) && szAboutMenu[0])
+        PCWSTR pszAboutMenu = nullptr;
+        int iAboutMenuLength = LoadStringW(g_hInstance, IDS_ABOUTBOX, reinterpret_cast<LPWSTR>(&pszAboutMenu), 0);
+        if (iAboutMenuLength > 0)
         {
+            std::wstring aboutMenu(pszAboutMenu, iAboutMenuLength);
             HMENU hSysMenu = GetSystemMenu(hDlg, FALSE);
             if (hSysMenu)
             {
                 AppendMenuW(hSysMenu, MF_SEPARATOR, 0, nullptr);
-                AppendMenuW(hSysMenu, MF_STRING, IDM_ABOUTBOX, szAboutMenu);
+                AppendMenuW(hSysMenu, MF_STRING, IDM_ABOUTBOX, aboutMenu.c_str());
             }
         }
 
@@ -415,7 +422,7 @@ namespace
             return TRUE;
 
         case WM_SYSCOMMAND:
-            if (IDM_ABOUTBOX == (wParam & 0xFFF0))
+            if (static_cast<int>(wParam & 0xFFF0) == IDM_ABOUTBOX)
             {
                 ShowAboutBox();
                 return TRUE;
