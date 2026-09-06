@@ -1,33 +1,19 @@
 #pragma once
-#include <vector>
 
-using namespace std;
-
-#define ARRAY_SIZE 1024
-typedef vector<TCHAR *> StringVector;
+#include "stdafx.h"
 
 class CDesktopManager
 {
 public:
-	CDesktopManager(void);
-	virtual ~CDesktopManager(void);
+    static int GetDesktopCount(void);
+    static std::wstring GetDesktopName(int iIndex);
+    static std::wstring GetCurrentDesktopName(void);
+    static bool IsCurrentDesktop(const std::wstring& desktopName);
+    static bool SwitchDesktop(const std::wstring& desktopName);
+    static bool CreateDesktop(const std::wstring& desktopName);
+    static bool LaunchApplication(const std::wstring& applicationFilePath, const std::wstring& desktopName);
 
 private:
-	static StringVector m_szDesktopNames;
-	static void AddDesktop(TCHAR *pszDesktopName);
-
-public:
-	friend BOOL CALLBACK EnumDesktopProc(LPTSTR lpszDesktopName, LPARAM lParam);
-
-	static int GetDesktopCount(void);
-
-	static void ReleaseMemory(void);
-	static void GetDesktopName(int iIndex, TCHAR * szDesktopName);
-
-	static bool PopulateDesktopList(void);
-	static bool SwitchDesktop(TCHAR *pszDesktopName);
-	static bool CreateDesktop(TCHAR *pszDesktopName);
-	static bool IsCurrentDesktop(TCHAR *pszDesktopName);
-	static bool LaunchApplication(TCHAR *pszApplicationFilePath, TCHAR *pszDesktopName);
-	static bool GetCurrentDesktopName(TCHAR szDesktopName[ARRAY_SIZE]);
+    static void PopulateDesktopList(void);
+    static std::vector<std::wstring> m_desktopNames;
 };

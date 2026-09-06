@@ -4,10 +4,10 @@
 #pragma once
 
 #ifndef __AFXWIN_H__
-	#error "include 'stdafx.h' before including this file for PCH"
+    #error "include 'stdafx.h' before including this file for PCH"
 #endif
 
-#include "resource.h"		// main symbols
+#include "resource.h"        // main symbols
 
 
 // CEventHookerDllApp
@@ -17,11 +17,11 @@
 class CEventHookerDllApp : public CWinApp
 {
 public:
-	CEventHookerDllApp();
+    CEventHookerDllApp();
 
 // Overrides
 public:
-	virtual BOOL InitInstance();
+    virtual BOOL InitInstance();
 
-	DECLARE_MESSAGE_MAP()
+    DECLARE_MESSAGE_MAP()
 };

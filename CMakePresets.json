@@ -15,7 +15,7 @@
         "strategy": "set"
       },
       "toolset": {
-        "value": "host=x64,version=14.44",
+        "value": "host=x64",
         "strategy": "set"
       },
       "binaryDir": "${sourceDir}/build/win32",

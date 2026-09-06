@@ -4,7 +4,7 @@ LIBRARY      "Event Hooker Dll"
 
 EXPORTS
     ; Explicit exports can go here
-	InstallWinProcHook		@1
-	UnInstallWinProcHook	@2
-	InstallMessageHook		@3
-	UnInstallMsgHook		@4
+    InstallWinProcHook        @1
+    UnInstallWinProcHook      @2
+    InstallMessageHook        @3
+    UnInstallMsgHook          @4

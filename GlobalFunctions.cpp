@@ -1,40 +1,38 @@
-#pragma once
 #include "stdafx.h"
 
-void DebugPrintErrorMessage(TCHAR *pszErrorString = NULL, bool bDisplayMsg = false, TCHAR *pszMsgCaption = NULL)
+std::wstring GetLastErrorMessage(void)
 {
-	DWORD iErrorNo = GetLastError();
+    LPWSTR pszBuffer = NULL;
+    FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+        NULL,
+        GetLastError(),
+        0,
+        reinterpret_cast<LPWSTR>(&pszBuffer),
+        0,
+        NULL);
 
-	if(!iErrorNo)
-	{
-		//OutputDebugString(_T("\n====================Zero Error Number."));
-		if(pszErrorString)
-			OutputDebugString(pszErrorString);
-		return;
-	}
+    std::wstring errorMessage;
+    if (pszBuffer)
+    {
+        wil::unique_hlocal hBuffer(reinterpret_cast<HLOCAL>(pszBuffer));
+        errorMessage = pszBuffer;
+        while (!errorMessage.empty() && (errorMessage.back() == L'\n' || errorMessage.back() == L'\r'))
+            errorMessage.pop_back();
+    }
+    return errorMessage;
+}
 
-	TCHAR szFormattedErrorString[1024] = {0};
+void DebugPrintErrorMessage(const wchar_t* pszErrorString)
+{
+    DWORD iErrorNo = GetLastError();
 
-	{
-		LPVOID lpBuff = NULL;
+    std::wstring output = L"\n";
+    if (pszErrorString)
+        output += pszErrorString;
 
-		FormatMessage(	FORMAT_MESSAGE_ALLOCATE_BUFFER |
-						FORMAT_MESSAGE_FROM_SYSTEM | 
-						FORMAT_MESSAGE_IGNORE_INSERTS, 
-						NULL, 
-						iErrorNo, 
-						0, // Default language
-						(LPTSTR) &lpBuff, 
-						0, 
-						NULL 
-					);
+    if (iErrorNo)
+        output += L"\nError Number: " + std::to_wstring(iErrorNo)
+            + L"\nSystem Error Description: " + GetLastErrorMessage();
 
-		wsprintf(szFormattedErrorString, _T("\nError Number :\t%d\nCusrom Error Description:\t%s\nSystem Error Description:\t%s"), iErrorNo, pszErrorString, (LPTSTR) lpBuff);
-		LocalFree(lpBuff);
-	}
-
-	OutputDebugString(szFormattedErrorString);
-
-	if(bDisplayMsg)
-		MessageBox(NULL, szFormattedErrorString, pszMsgCaption, MB_ICONERROR);
+    OutputDebugStringW(output.c_str());
 }

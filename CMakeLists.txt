@@ -1,16 +1,22 @@
 cmake_minimum_required(VERSION 3.21)
 
-if(NOT DEFINED CMAKE_GENERATOR_TOOLSET AND CMAKE_GENERATOR MATCHES "Visual Studio")
-    set(CMAKE_GENERATOR_TOOLSET "host=x64,version=14.44" CACHE STRING "MSVC toolset version" FORCE)
-endif()
-
-set(CMAKE_MFC_FLAG 1)
-
 project(VirtualDesktop LANGUAGES CXX RC)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/$<CONFIG>)
 
-set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+include(FetchContent)
+set(WIL_BUILD_TESTS OFF)
+set(WIL_BUILD_PACKAGING OFF)
+FetchContent_Declare(WIL
+    GIT_REPOSITORY https://github.com/microsoft/wil
+    GIT_TAG        v1.0.260126.7
+)
+FetchContent_MakeAvailable(WIL)
 
 add_executable(VirtualDesktop WIN32
     DesktopManager.cpp
@@ -23,11 +29,12 @@ add_executable(VirtualDesktop WIN32
     "res/Virtual Desktop.ico"
 )
 target_include_directories(VirtualDesktop PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(VirtualDesktop PRIVATE WIL::WIL)
 target_precompile_headers(VirtualDesktop PRIVATE stdafx.h)
 target_compile_definitions(VirtualDesktop PRIVATE UNICODE _UNICODE _WINDOWS)
 set_target_properties(VirtualDesktop PROPERTIES
     OUTPUT_NAME "Virtual Desktop"
-    VS_GLOBAL_KEYWORD "MFCProj"
+    VS_GLOBAL_KEYWORD "Win32Proj"
 )
 
 set_property(TARGET VirtualDesktop PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
@@ -44,6 +51,7 @@ target_compile_definitions(EventHookerDll PRIVATE UNICODE _UNICODE _WINDOWS _USR
 set_target_properties(EventHookerDll PROPERTIES
     OUTPUT_NAME "Event Hooker Dll"
 )
+
 set_property(TARGET EventHookerDll PROPERTY LINK_FLAGS
     "/DEF:\"${CMAKE_CURRENT_SOURCE_DIR}/Event Hooker Dll/Event Hooker Dll.def\"")
 set_property(TARGET EventHookerDll PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
