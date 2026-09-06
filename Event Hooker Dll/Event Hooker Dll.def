@@ -1,0 +1,10 @@
+; Event Hooker Dll.def : Declares the module parameters for the DLL.
+
+LIBRARY      "Event Hooker Dll"
+
+EXPORTS
+    ; Explicit exports can go here
+	InstallWinProcHook		@1
+	UnInstallWinProcHook	@2
+	InstallMessageHook		@3
+	UnInstallMsgHook		@4
