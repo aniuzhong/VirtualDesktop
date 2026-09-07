@@ -11,7 +11,6 @@ namespace
     const UINT CONTEXT_MENU_IDS = 600;
     const UINT MANAGE_DESKTOP_MENU_ID = 500;
     const UINT VERIFY_SWITCH_MENU_ID = 501;
-    const UINT LAUNCH_APP_MENU_ID = 502;
     const UINT EXIT_MENU_ID = 503;
     const UINT SEPARATOR_MENU_ID = 504;
 
@@ -95,41 +94,6 @@ namespace
         nData.hWnd = hDlg;
         nData.uID = 1;
         Shell_NotifyIconW(NIM_DELETE, &nData);
-    }
-
-    bool RegisterApplicationHotKeys(void)
-    {
-        int iDesktopCount = DesktopManager::GetDesktopCount();
-        for (int iCounter = 0; iCounter < iDesktopCount; iCounter++)
-        {
-            if (!RegisterHotKey(g_hDlg, BASE_HOT_KEY_ID + iCounter, MOD_CONTROL | MOD_SHIFT, L'1' + iCounter))
-            {
-                DebugPrintErrorMessage(L"Hot Key Registration Failed.");
-                return false;
-            }
-        }
-        return true;
-    }
-
-    void UnRegisterApplicationHotKeys(void)
-    {
-        for (int iCounter = 0; ; iCounter++)
-        {
-            if (!UnregisterHotKey(g_hDlg, BASE_HOT_KEY_ID + iCounter))
-                break;
-        }
-    }
-
-    bool UpdateHotKeys(void)
-    {
-        UnRegisterApplicationHotKeys();
-
-        if (!RegisterApplicationHotKeys())
-        {
-            MessageBoxW(g_hDlg, L"Failed to register application hot keys.", TXT_MESSAGEBOX_TITLE, MB_ICONINFORMATION | MB_TOPMOST | MB_TASKMODAL);
-            return false;
-        }
-        return true;
     }
 
     void SwitchDesktopTo(const std::wstring& desktopName)
@@ -230,7 +194,6 @@ namespace
                 SendMessageW(g_hDesktopList, LB_SELECTSTRING, 0, reinterpret_cast<LPARAM>(name.c_str()));
 
                 OnDesktopListSelChange();
-                UpdateHotKeys();
             }
         }
         else
@@ -248,57 +211,6 @@ namespace
         SwitchDesktopTo(GetSelectedDesktopName());
     }
 
-    void OnLaunchApplication(void)
-    {
-        std::wstring desktopName = GetSelectedDesktopName();
-        if (desktopName.empty())
-        {
-            MessageBoxW(g_hDlg, L"Please select the desktop name from the list. And click 'Launch Application' button", TXT_MESSAGEBOX_TITLE, MB_OK);
-            ShowManageDesktopsDialog();
-            return;
-        }
-
-        if (_wcsicmp(desktopName.c_str(), L"WinLogon") == 0 || _wcsicmp(desktopName.c_str(), L"Disconnect") == 0)
-        {
-            MessageBoxW(g_hDlg, L"Application cann't be launched in this Desktop.", TXT_MESSAGEBOX_TITLE, MB_OK);
-            ShowManageDesktopsDialog();
-            return;
-        }
-
-        std::wstring fileName(32768, L'\0');
-        OPENFILENAMEW ofn = { 0 };
-        ofn.lStructSize = sizeof(ofn);
-        ofn.hwndOwner = g_hDlg;
-        ofn.lpstrFilter = L"Applications (*.Exe)\0*.Exe\0";
-        ofn.lpstrFile = fileName.data();
-        ofn.nMaxFile = static_cast<DWORD>(fileName.size());
-        ofn.Flags = OFN_HIDEREADONLY | OFN_OVERWRITEPROMPT;
-
-        if (GetOpenFileNameW(&ofn))
-        {
-            fileName.resize(wcslen(fileName.c_str()));
-            if (DesktopManager::LaunchApplication(fileName, desktopName))
-            {
-                std::wstring message = std::format(L"Application is launched into the Desktop '{}'.", desktopName);
-                MessageBoxW(g_hDlg, message.c_str(), TXT_MESSAGEBOX_TITLE, MB_ICONINFORMATION);
-            }
-            else
-            {
-                std::wstring message = std::format(L"Failed to launch application into the Desktop '{}'.", desktopName);
-                MessageBoxW(g_hDlg, message.c_str(), TXT_MESSAGEBOX_TITLE, MB_ICONERROR);
-            }
-        }
-    }
-
-    void OnHotKey(WPARAM wParam)
-    {
-        int iDesktopCount = DesktopManager::GetDesktopCount();
-        int iDesktopIndex = iDesktopCount - (static_cast<int>(wParam) - BASE_HOT_KEY_ID) - 1;
-        std::wstring desktopName = DesktopManager::GetDesktopName(iDesktopIndex);
-        if (!desktopName.empty())
-            SwitchDesktopTo(desktopName);
-    }
-
     void OnTrayMessage(WPARAM, LPARAM lParam)
     {
         UINT uMsg = static_cast<UINT>(lParam);
@@ -309,17 +221,15 @@ namespace
         GetCursorPos(&pt);
 
         int iDesktopCount = DesktopManager::GetDesktopCount();
-        int iHotKeyCounter = iDesktopCount;
 
         wil::unique_hmenu hContextMenu(CreatePopupMenu());
 
         for (int iMenuItemCount = 0; iMenuItemCount < iDesktopCount; iMenuItemCount++)
         {
             std::wstring desktopName = DesktopManager::GetDesktopName(iMenuItemCount);
-            std::wstring menuItemName = std::format(L"{}\tCtrl + Shift + {}", desktopName, iHotKeyCounter--);
 
             UINT flags = MF_STRING | MF_ENABLED | (DesktopManager::IsCurrentDesktop(desktopName) ? MF_CHECKED : 0);
-            AppendMenuW(hContextMenu.get(), flags, CONTEXT_MENU_IDS + iMenuItemCount, menuItemName.c_str());
+            AppendMenuW(hContextMenu.get(), flags, CONTEXT_MENU_IDS + iMenuItemCount, desktopName.c_str());
         }
 
         if (iDesktopCount > 0)
@@ -327,7 +237,6 @@ namespace
 
         AppendMenuW(hContextMenu.get(), MF_ENABLED | MF_STRING | (IsVerifyChecked() ? MF_CHECKED : 0), VERIFY_SWITCH_MENU_ID, TXT_CONFIRM_MENU_ITEM);
         AppendMenuW(hContextMenu.get(), MF_ENABLED | MF_STRING, MANAGE_DESKTOP_MENU_ID, TXT_MANAGE_DESKTOP_MENU_ITEM);
-        AppendMenuW(hContextMenu.get(), MF_ENABLED | MF_STRING, LAUNCH_APP_MENU_ID, TXT_LAUNCH_APPLICATION_MENU_ITEM);
         AppendMenuW(hContextMenu.get(), MF_ENABLED | MF_SEPARATOR, SEPARATOR_MENU_ID, nullptr);
         AppendMenuW(hContextMenu.get(), MF_ENABLED | MF_STRING, IDM_ABOUTBOX, TXT_ABOUT_MENU_ITEM);
         AppendMenuW(hContextMenu.get(), MF_ENABLED | MF_SEPARATOR, SEPARATOR_MENU_ID, nullptr);
@@ -347,8 +256,6 @@ namespace
             CheckDlgButton(g_hDlg, IDC_VERIFY_CHECK, IsVerifyChecked() ? BST_UNCHECKED : BST_CHECKED);
             RegSettings::SetProfileInt(REG_KEY_COMMON_SETTINGS, REG_SUB_KEY_CONFIRM_SWITCH, IsVerifyChecked() ? 1 : 0);
         }
-        else if (LAUNCH_APP_MENU_ID == iSelectedIndex)
-            OnLaunchApplication();
         else if (iSelectedIndex >= static_cast<int>(CONTEXT_MENU_IDS))
         {
             std::wstring desktopName = DesktopManager::GetDesktopName(iSelectedIndex - CONTEXT_MENU_IDS);
@@ -385,14 +292,6 @@ namespace
         {
             spdlog::error("failed to add tray icon");
             MessageBoxW(hDlg, L"Failed to set tray icon.", TXT_MESSAGEBOX_TITLE, MB_ICONINFORMATION | MB_TOPMOST | MB_TASKMODAL);
-            PostQuitMessage(-1);
-            return;
-        }
-
-        if (!RegisterApplicationHotKeys())
-        {
-            spdlog::error("failed to register hot keys");
-            MessageBoxW(hDlg, L"Failed to register Hot Keys.", TXT_MESSAGEBOX_TITLE, MB_ICONINFORMATION | MB_TOPMOST | MB_TASKMODAL);
             PostQuitMessage(-1);
             return;
         }
@@ -457,13 +356,6 @@ namespace
                     return TRUE;
                 }
                 break;
-            case IDC_LAUNCH_APPLICATION:
-                if (BN_CLICKED == HIWORD(wParam))
-                {
-                    OnLaunchApplication();
-                    return TRUE;
-                }
-                break;
             case IDC_VERIFY_CHECK:
                 if (BN_CLICKED == HIWORD(wParam))
                 {
@@ -474,13 +366,8 @@ namespace
             }
             break;
 
-        case WM_HOTKEY:
-            OnHotKey(wParam);
-            return TRUE;
-
         case WM_DESTROY:
             spdlog::info("instance exiting");
-            UnRegisterApplicationHotKeys();
             RemoveTrayIcon(hDlg);
             g_hDlg = nullptr;
             PostQuitMessage(0);
