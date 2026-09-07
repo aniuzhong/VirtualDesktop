@@ -1,4 +1,5 @@
 #include "stdafx.h"
+#include "wilx/desktops.h"
 #include "DesktopManager.h"
 
 namespace
@@ -6,12 +7,6 @@ namespace
     constexpr std::wstring_view ExecutableExtensions[] = { L".exe", L".com", L".pif", L".scr" };
 
     std::vector<std::wstring> g_desktopNames;
-
-    BOOL CALLBACK EnumDesktopProc(LPWSTR lpszDesktopName, LPARAM lParam)
-    {
-        reinterpret_cast<std::vector<std::wstring>*>(lParam)->emplace_back(lpszDesktopName);
-        return TRUE;
-    }
 
     bool IsExecutableFile(const std::wstring& filePath)
     {
@@ -43,11 +38,9 @@ namespace
         }
 
         std::vector<std::wstring> desktopNames;
-        if (!EnumDesktopsW(hWindowsStation, EnumDesktopProc, reinterpret_cast<LPARAM>(&desktopNames)))
-        {
-            DebugPrintErrorMessage(L"EnumDesktops failed in PopulateDesktopList.");
-            return;
-        }
+        wilx::for_each_desktop(hWindowsStation, [&](PCWSTR lpszDesktopName) {
+            desktopNames.emplace_back(lpszDesktopName);
+        });
 
         g_desktopNames = std::move(desktopNames);
     }
