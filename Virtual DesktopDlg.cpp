@@ -145,6 +145,8 @@ namespace
         if (desktopName.empty())
             return;
 
+        spdlog::info("switch to desktop '{}'", ToUtf8(desktopName));
+
         SetForegroundWindow(g_hDlg);
 
         if (DesktopManager::IsCurrentDesktop(desktopName))
@@ -164,6 +166,7 @@ namespace
         {
             std::wstring appName = wil::GetModuleFileNameW(nullptr).get();
             DesktopManager::LaunchApplication(appName, desktopName);
+            spdlog::info("self relaunched on target desktop, this instance exits");
             UnRegisterApplicationHotKeys();
             PostQuitMessage(0);
         }
@@ -391,6 +394,7 @@ namespace
 
         if (!AddTrayIcon(hDlg))
         {
+            spdlog::error("failed to add tray icon");
             MessageBoxW(hDlg, L"Failed to set tray icon.", TXT_MESSAGEBOX_TITLE, MB_ICONINFORMATION | MB_TOPMOST | MB_TASKMODAL);
             PostQuitMessage(-1);
             return;
@@ -398,6 +402,7 @@ namespace
 
         if (!RegisterApplicationHotKeys())
         {
+            spdlog::error("failed to register hot keys");
             MessageBoxW(hDlg, L"Failed to register Hot Keys.", TXT_MESSAGEBOX_TITLE, MB_ICONINFORMATION | MB_TOPMOST | MB_TASKMODAL);
             PostQuitMessage(-1);
             return;
@@ -405,6 +410,8 @@ namespace
 
         CheckDlgButton(hDlg, IDC_VERIFY_CHECK,
             RegSettings::ReadProfileInt(REG_KEY_COMMON_SETTINGS, REG_SUB_KEY_CONFIRM_SWITCH, 1) ? BST_CHECKED : BST_UNCHECKED);
+
+        spdlog::info("initialized, {} desktop(s) available", DesktopManager::GetDesktopCount());
     }
 
     INT_PTR CALLBACK VirtualDesktopDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
@@ -478,6 +485,7 @@ namespace
             return TRUE;
 
         case WM_DESTROY:
+            spdlog::info("instance exiting");
             RemoveTrayIcon(hDlg);
             g_hDlg = nullptr;
             break;

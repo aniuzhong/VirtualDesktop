@@ -33,4 +33,19 @@ void DebugPrintErrorMessage(const wchar_t* pszErrorString)
         output += std::format(L"\nError Number: {}\nSystem Error Description: {}", iErrorNo, GetLastErrorMessage());
 
     OutputDebugStringW(output.c_str());
+
+    std::wstring logLine = output;
+    logLine.erase(0, logLine.find_first_not_of(L'\n'));
+    spdlog::error("{}", ToUtf8(logLine));
+}
+
+std::string ToUtf8(std::wstring_view text)
+{
+    if (text.empty())
+        return {};
+
+    int iBytes = WideCharToMultiByte(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), nullptr, 0, nullptr, nullptr);
+    std::string utf8(iBytes, '\0');
+    WideCharToMultiByte(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), utf8.data(), iBytes, nullptr, nullptr);
+    return utf8;
 }

@@ -12,9 +12,13 @@
 #include <cwctype>
 #include <filesystem>
 #include <format>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <vector>
+
+#include <spdlog/spdlog.h>
+#include <spdlog/sinks/rotating_file_sink.h>
 
 #include <wil/resource.h>
 #include <wil/result.h>

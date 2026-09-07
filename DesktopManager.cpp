@@ -150,6 +150,7 @@ namespace DesktopManager
         if (!alreadyExists)
             LaunchApplication(QueryWindowsDirectory() + L"\\Explorer.Exe", desktopName);
 
+        spdlog::info("desktop '{}' created", ToUtf8(desktopName));
         PopulateDesktopList();
         return true;
     }
@@ -166,6 +167,8 @@ namespace DesktopManager
         }
 
         std::wstring directoryName = std::filesystem::path(applicationFilePath).parent_path().wstring();
+
+        spdlog::info("launch '{}' on desktop '{}'", ToUtf8(applicationFilePath), ToUtf8(desktopName));
 
         wil::unique_process_information processInfo;
         STARTUPINFOW sInfo = { 0 };

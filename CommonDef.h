@@ -14,3 +14,4 @@
 // GlobalFunctions.cpp
 std::wstring GetLastErrorMessage(void);
 void DebugPrintErrorMessage(const wchar_t* pszErrorString = nullptr);
+std::string ToUtf8(std::wstring_view text);

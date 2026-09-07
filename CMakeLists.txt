@@ -19,6 +19,17 @@ FetchContent_Declare(WIL
 )
 FetchContent_MakeAvailable(WIL)
 
+set(SPDLOG_USE_STD_FORMAT ON)
+set(SPDLOG_BUILD_EXAMPLE OFF)
+set(SPDLOG_BUILD_TESTS OFF)
+set(SPDLOG_INSTALL OFF)
+FetchContent_Declare(spdlog
+    GIT_REPOSITORY https://github.com/gabime/spdlog
+    GIT_TAG        v1.17.0
+    GIT_SHALLOW    TRUE
+)
+FetchContent_MakeAvailable(spdlog)
+
 add_executable(VirtualDesktop WIN32
     DesktopManager.cpp
     GlobalFunctions.cpp
@@ -29,7 +40,7 @@ add_executable(VirtualDesktop WIN32
     "res/Virtual Desktop.ico"
 )
 target_include_directories(VirtualDesktop PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(VirtualDesktop PRIVATE WIL::WIL)
+target_link_libraries(VirtualDesktop PRIVATE WIL::WIL spdlog::spdlog)
 target_precompile_headers(VirtualDesktop PRIVATE stdafx.h)
 target_compile_definitions(VirtualDesktop PRIVATE UNICODE _UNICODE _WINDOWS)
 target_compile_options(VirtualDesktop PRIVATE /W4)
