@@ -111,33 +111,25 @@ namespace
         return true;
     }
 
-    bool UnRegisterApplicationHotKeys(void)
+    void UnRegisterApplicationHotKeys(void)
     {
-        int iDesktopCount = DesktopManager::GetDesktopCount() - 1;
-        bool bReturn = true;
-        for (int iCounter = 0; iCounter < iDesktopCount; iCounter++)
+        for (int iCounter = 0; ; iCounter++)
         {
             if (!UnregisterHotKey(g_hDlg, BASE_HOT_KEY_ID + iCounter))
-            {
-                DebugPrintErrorMessage(L"Hot Key UnRegistration Failed.");
-                bReturn = false;
-            }
+                break;
         }
-        return bReturn;
     }
 
     bool UpdateHotKeys(void)
     {
-        bool bReturn = UnRegisterApplicationHotKeys();
-        if (!bReturn)
-            MessageBoxW(g_hDlg, L"Failed to unregister application hot keys.", TXT_MESSAGEBOX_TITLE, MB_ICONINFORMATION | MB_TOPMOST | MB_TASKMODAL);
+        UnRegisterApplicationHotKeys();
 
         if (!RegisterApplicationHotKeys())
         {
             MessageBoxW(g_hDlg, L"Failed to register application hot keys.", TXT_MESSAGEBOX_TITLE, MB_ICONINFORMATION | MB_TOPMOST | MB_TASKMODAL);
             return false;
         }
-        return bReturn;
+        return true;
     }
 
     void SwitchDesktopTo(const std::wstring& desktopName)
@@ -164,11 +156,10 @@ namespace
 
         if (DesktopManager::SwitchDesktop(desktopName))
         {
-            std::wstring appName = wil::GetModuleFileNameW(nullptr).get();
+            std::wstring appName = wil::GetModuleFileNameW<std::wstring>(nullptr);
             DesktopManager::LaunchApplication(appName, desktopName);
             spdlog::info("self relaunched on target desktop, this instance exits");
-            UnRegisterApplicationHotKeys();
-            PostQuitMessage(0);
+            DestroyWindow(g_hDlg);
         }
     }
 
@@ -193,6 +184,7 @@ namespace
         }
 
         ShowWindow(g_hDlg, SW_SHOW);
+        SetForegroundWindow(g_hDlg);
     }
 
     void OnDesktopListSelChange(void)
@@ -347,10 +339,7 @@ namespace
         if (IDM_ABOUTBOX == iSelectedIndex)
             ShowAboutBox();
         else if (EXIT_MENU_ID == iSelectedIndex)
-        {
-            UnRegisterApplicationHotKeys();
-            PostQuitMessage(0);
-        }
+            DestroyWindow(g_hDlg);
         else if (MANAGE_DESKTOP_MENU_ID == iSelectedIndex)
             ShowManageDesktopsDialog();
         else if (VERIFY_SWITCH_MENU_ID == iSelectedIndex)
@@ -436,11 +425,16 @@ namespace
             }
             break;
 
+        case WM_CLOSE:
+            ShowWindow(g_hDlg, SW_HIDE);
+            return TRUE;
+
         case WM_COMMAND:
             switch (LOWORD(wParam))
             {
             case IDOK:
-                DestroyWindow(g_hDlg);
+            case IDCANCEL:
+                ShowWindow(g_hDlg, SW_HIDE);
                 return TRUE;
             case IDC_DESKTOP_LIST:
                 if (LBN_SELCHANGE == HIWORD(wParam))
@@ -486,8 +480,10 @@ namespace
 
         case WM_DESTROY:
             spdlog::info("instance exiting");
+            UnRegisterApplicationHotKeys();
             RemoveTrayIcon(hDlg);
             g_hDlg = nullptr;
+            PostQuitMessage(0);
             break;
         }
 
