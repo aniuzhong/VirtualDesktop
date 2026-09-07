@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "wilx/desktops.h"
+#include "wilx/win32_helpers.h"
 #include "DesktopManager.h"
 
 namespace
@@ -63,30 +64,7 @@ namespace DesktopManager
 
     std::wstring GetCurrentDesktopName(void)
     {
-        HDESK hCurrentDesktop = GetThreadDesktop(GetCurrentThreadId());
-        if (NULL == hCurrentDesktop)
-        {
-            DebugPrintErrorMessage(L"GetThreadDesktop failed in GetCurrentDesktopName.");
-            return std::wstring();
-        }
-
-        DWORD iBytesNeeded = 0;
-        if (!GetUserObjectInformationW(hCurrentDesktop, UOI_NAME, nullptr, 0, &iBytesNeeded) &&
-            ERROR_INSUFFICIENT_BUFFER != GetLastError())
-        {
-            DebugPrintErrorMessage(L"GetUserObjectInformation failed in GetCurrentDesktopName.");
-            return std::wstring();
-        }
-
-        std::wstring desktopName(iBytesNeeded / sizeof(wchar_t) + 1, L'\0');
-        if (!GetUserObjectInformationW(hCurrentDesktop, UOI_NAME, desktopName.data(), iBytesNeeded, &iBytesNeeded))
-        {
-            DebugPrintErrorMessage(L"GetUserObjectInformation failed in GetCurrentDesktopName.");
-            return std::wstring();
-        }
-
-        desktopName.resize(wcslen(desktopName.c_str()));
-        return desktopName;
+        return wilx::TryGetThreadDesktopName();
     }
 
     bool IsCurrentDesktop(const std::wstring& desktopName)
