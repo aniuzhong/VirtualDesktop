@@ -86,6 +86,13 @@ namespace
         if (desktopName.empty())
             return false;
 
+        // Snapshot before CreateDesktopW: afterwards the snapshot would contain
+        // the new desktop itself and read as a duplicate, skipping the Explorer
+        // launch — leaving an unpinned desktop that dies with our handle.
+        const std::vector<std::wstring> existingNames = GetDesktopNames();
+        const bool alreadyExists = std::any_of(existingNames.begin(), existingNames.end(),
+            [&desktopName](const std::wstring& existing) { return _wcsicmp(existing.c_str(), desktopName.c_str()) == 0; });
+
         SECURITY_ATTRIBUTES sAttribute = { sizeof(SECURITY_ATTRIBUTES), NULL, TRUE };
         wil::unique_hdesk hNewDesktop(::CreateDesktopW(desktopName.c_str(), NULL, NULL, DF_ALLOWOTHERACCOUNTHOOK, GENERIC_ALL, &sAttribute));
         if (!hNewDesktop)
@@ -96,9 +103,6 @@ namespace
             return false;
         }
 
-        const std::vector<std::wstring> existingNames = GetDesktopNames();
-        const bool alreadyExists = std::any_of(existingNames.begin(), existingNames.end(),
-            [&desktopName](const std::wstring& existing) { return _wcsicmp(existing.c_str(), desktopName.c_str()) == 0; });
         if (!alreadyExists)
         {
             std::wstring windowsDirectory;
