@@ -3,6 +3,9 @@
 //    wilx - WIL-style extensions for Virtual Desktop.
 //    One theme per header, header-only, mirroring wil's
 //    organization: details trampolines + thin public APIs.
+//    House rules: build on wil's public API only (wil::details
+//    is reference material, never a dependency); C++23 and up,
+//    no historical back-compat layers.
 //
 //*********************************************************
 //! @file
