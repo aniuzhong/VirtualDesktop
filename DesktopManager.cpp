@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include "wilx/desktops.h"
 #include "wilx/win32_helpers.h"
+#include "wilx/strings.h"
 #include "DesktopManager.h"
 
 namespace
@@ -18,14 +19,12 @@ namespace
 
     std::wstring QueryWindowsDirectory(void)
     {
-        std::wstring windowsDirectory(MAX_PATH + 1, L'\0');
-        UINT iLength = GetWindowsDirectoryW(windowsDirectory.data(), static_cast<UINT>(windowsDirectory.size()));
-        if (iLength > windowsDirectory.size())
+        std::wstring windowsDirectory;
+        if (FAILED(wil::GetWindowsDirectoryW(windowsDirectory)))
         {
-            windowsDirectory.resize(iLength);
-            iLength = GetWindowsDirectoryW(windowsDirectory.data(), static_cast<UINT>(windowsDirectory.size()));
+            DebugPrintErrorMessage(L"GetWindowsDirectory failed in QueryWindowsDirectory.", GetLastError());
+            return {};
         }
-        windowsDirectory.resize(iLength);
         return windowsDirectory;
     }
 
@@ -34,12 +33,12 @@ namespace
         HWINSTA hWindowsStation = GetProcessWindowStation();
         if (NULL == hWindowsStation)
         {
-            DebugPrintErrorMessage(L"GetProcessWindowStation failed in PopulateDesktopList.");
+            DebugPrintErrorMessage(L"GetProcessWindowStation failed in PopulateDesktopList.", GetLastError());
             return;
         }
 
         std::vector<std::wstring> desktopNames;
-        wilx::for_each_desktop(hWindowsStation, [&](PCWSTR lpszDesktopName) {
+        wilx::for_each_desktop_nothrow(hWindowsStation, [&](PCWSTR lpszDesktopName) {
             desktopNames.emplace_back(lpszDesktopName);
         });
 
@@ -83,18 +82,20 @@ namespace DesktopManager
         wil::unique_hdesk hDesktopToSwitch(OpenDesktopW(desktopName.c_str(), DF_ALLOWOTHERACCOUNTHOOK, TRUE, GENERIC_ALL));
         if (!hDesktopToSwitch)
         {
-            if (ERROR_ACCESS_DENIED == GetLastError())
+            DWORD openError = GetLastError();
+            if (ERROR_ACCESS_DENIED == openError)
             {
-                std::wstring errorMsg = std::format(L"Failed to switch to {} desktop.\n\t {}", desktopName, GetLastErrorMessage());
+                std::wstring errorMsg = std::format(L"Failed to switch to {} desktop.\n\t {}",
+                    desktopName, wilx::TryGetWin32ErrorMessage(openError));
                 MessageBoxW(NULL, errorMsg.c_str(), TXT_MESSAGEBOX_TITLE, MB_ICONINFORMATION | MB_TOPMOST | MB_TASKMODAL);
             }
-            DebugPrintErrorMessage(L"OpenDesktop failed in SwitchDesktop.");
+            DebugPrintErrorMessage(L"OpenDesktop failed in SwitchDesktop.", openError);
             return false;
         }
 
         if (!::SwitchDesktop(hDesktopToSwitch.get()))
         {
-            DebugPrintErrorMessage(L"SwitchDesktop failed in SwitchDesktop.");
+            DebugPrintErrorMessage(L"SwitchDesktop failed in SwitchDesktop.", GetLastError());
             return false;
         }
 
@@ -110,9 +111,9 @@ namespace DesktopManager
         wil::unique_hdesk hNewDesktop(::CreateDesktopW(desktopName.c_str(), NULL, NULL, DF_ALLOWOTHERACCOUNTHOOK, GENERIC_ALL, &sAttribute));
         if (!hNewDesktop)
         {
-            std::wstring errorMsg = GetLastErrorMessage();
-            MessageBoxW(NULL, errorMsg.c_str(), TXT_MESSAGEBOX_TITLE, MB_ICONERROR | MB_TOPMOST | MB_TASKMODAL);
-            DebugPrintErrorMessage(L"CreateDesktop failed in CreateDesktop.");
+            DWORD createError = GetLastError();
+            MessageBoxW(NULL, wilx::TryGetWin32ErrorMessage(createError).c_str(), TXT_MESSAGEBOX_TITLE, MB_ICONERROR | MB_TOPMOST | MB_TASKMODAL);
+            DebugPrintErrorMessage(L"CreateDesktop failed in CreateDesktop.", createError);
             return false;
         }
 
@@ -121,7 +122,7 @@ namespace DesktopManager
         if (!alreadyExists)
             LaunchApplication(QueryWindowsDirectory() + L"\\Explorer.Exe", desktopName);
 
-        spdlog::info("desktop '{}' created", ToUtf8(desktopName));
+        spdlog::info("desktop '{}' created", wilx::TryGetUtf8String(desktopName));
         PopulateDesktopList();
         return true;
     }
@@ -133,13 +134,14 @@ namespace DesktopManager
 
         if (!IsExecutableFile(applicationFilePath))
         {
-            DebugPrintErrorMessage(L"Invalid File Extension in LaunchApplication.");
+            DebugPrintErrorMessage(L"Invalid File Extension in LaunchApplication.", 0);
             return false;
         }
 
         std::wstring directoryName = std::filesystem::path(applicationFilePath).parent_path().wstring();
 
-        spdlog::info("launch '{}' on desktop '{}'", ToUtf8(applicationFilePath), ToUtf8(desktopName));
+        spdlog::info("launch '{}' on desktop '{}'",
+            wilx::TryGetUtf8String(applicationFilePath), wilx::TryGetUtf8String(desktopName));
 
         wil::unique_process_information processInfo;
         STARTUPINFOW sInfo = { 0 };
@@ -157,7 +159,7 @@ namespace DesktopManager
                 &sInfo,
                 &processInfo))
         {
-            DebugPrintErrorMessage(GetLastErrorMessage().c_str());
+            DebugPrintErrorMessage(L"CreateProcess failed in LaunchApplication.", GetLastError());
             return false;
         }
 

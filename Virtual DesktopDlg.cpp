@@ -1,4 +1,7 @@
 #include "stdafx.h"
+#include "wilx/windowing.h"
+#include "wilx/shell.h"
+#include "wilx/strings.h"
 #include "resource.h"
 #include "DesktopManager.h"
 #include "RegSettings.h"
@@ -22,18 +25,11 @@ namespace
     HWND g_hAddNewDesktop = nullptr;
     HWND g_hSwitchToDesktop = nullptr;
 
+    wilx::unique_notify_icon_data g_trayIcon;
+
     bool IsVerifyChecked(void)
     {
         return IsDlgButtonChecked(g_hDlg, IDC_VERIFY_CHECK) == BST_CHECKED;
-    }
-
-    std::wstring GetControlText(HWND hWnd)
-    {
-        int iLength = GetWindowTextLengthW(hWnd) + 1;
-        std::wstring text(iLength, L'\0');
-        GetWindowTextW(hWnd, text.data(), iLength);
-        text.resize(wcslen(text.c_str()));
-        return text;
     }
 
     std::wstring GetSelectedDesktopName(void)
@@ -70,30 +66,20 @@ namespace
 
     bool AddTrayIcon(HWND hDlg)
     {
-        NOTIFYICONDATAW nData = { 0 };
-        nData.cbSize = sizeof(nData);
-        nData.hIcon = LoadIconW(g_hInstance, MAKEINTRESOURCEW(IDR_MAINFRAME));
-        nData.hWnd = hDlg;
-        nData.uID = 1;
-        nData.uCallbackMessage = WM_TRAYICON_NOTIFY_MESSAGE;
-        nData.uFlags = NIF_ICON | NIF_TIP | NIF_MESSAGE;
+        g_trayIcon.cbSize = sizeof(g_trayIcon);
+        g_trayIcon.hIcon = LoadIconW(g_hInstance, MAKEINTRESOURCEW(IDR_MAINFRAME));
+        g_trayIcon.hWnd = hDlg;
+        g_trayIcon.uID = 1;
+        g_trayIcon.uCallbackMessage = WM_TRAYICON_NOTIFY_MESSAGE;
+        g_trayIcon.uFlags = NIF_ICON | NIF_TIP | NIF_MESSAGE;
 
         std::wstring tip = TXT_MESSAGEBOX_TITLE;
         std::wstring currentDesktop = DesktopManager::GetCurrentDesktopName();
         if (!currentDesktop.empty())
             tip += std::format(L" [{} Desktop]", currentDesktop);
-        wcsncpy_s(nData.szTip, tip.c_str(), _TRUNCATE);
+        wcsncpy_s(g_trayIcon.szTip, tip.c_str(), _TRUNCATE);
 
-        return Shell_NotifyIconW(NIM_ADD, &nData) != FALSE;
-    }
-
-    void RemoveTrayIcon(HWND hDlg)
-    {
-        NOTIFYICONDATAW nData = { 0 };
-        nData.cbSize = sizeof(nData);
-        nData.hWnd = hDlg;
-        nData.uID = 1;
-        Shell_NotifyIconW(NIM_DELETE, &nData);
+        return Shell_NotifyIconW(NIM_ADD, &g_trayIcon) != FALSE;
     }
 
     void SwitchDesktopTo(const std::wstring& desktopName)
@@ -101,7 +87,7 @@ namespace
         if (desktopName.empty())
             return;
 
-        spdlog::info("switch to desktop '{}'", ToUtf8(desktopName));
+        spdlog::info("switch to desktop '{}'", wilx::TryGetUtf8String(desktopName));
 
         SetForegroundWindow(g_hDlg);
 
@@ -137,7 +123,7 @@ namespace
             SendMessageW(g_hDesktopList, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(name.c_str()));
         }
 
-        std::wstring selectedDesktopName = GetControlText(g_hDesktopName);
+        std::wstring selectedDesktopName = wilx::TryGetWindowText(g_hDesktopName);
 
         if (!selectedDesktopName.empty() && LB_ERR != SendMessageW(g_hDesktopList, LB_SELECTSTRING, 0, reinterpret_cast<LPARAM>(selectedDesktopName.c_str())))
             EnableWindow(g_hDesktopName, FALSE);
@@ -163,11 +149,11 @@ namespace
 
     void OnAddNewDesktop(void)
     {
-        std::wstring caption = GetControlText(g_hAddNewDesktop);
+        std::wstring caption = wilx::TryGetWindowText(g_hAddNewDesktop);
 
         if (_wcsicmp(caption.c_str(), L"&New") != 0)
         {
-            std::wstring name = GetControlText(g_hDesktopName);
+            std::wstring name = wilx::TryGetWindowText(g_hDesktopName);
 
             size_t begin = name.find_first_not_of(L' ');
             name = (std::wstring::npos == begin) ? std::wstring() : name.substr(begin);
@@ -368,7 +354,7 @@ namespace
 
         case WM_DESTROY:
             spdlog::info("instance exiting");
-            RemoveTrayIcon(hDlg);
+            g_trayIcon.reset();
             g_hDlg = nullptr;
             PostQuitMessage(0);
             break;

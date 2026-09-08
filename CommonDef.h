@@ -9,6 +9,4 @@
 #define REG_SUB_KEY_CONFIRM_SWITCH                     L"ConfirmSwitch"
 
 // GlobalFunctions.cpp
-std::wstring GetLastErrorMessage(void);
-void DebugPrintErrorMessage(const wchar_t* pszErrorString = nullptr);
-std::string ToUtf8(std::wstring_view text);
+void DebugPrintErrorMessage(const wchar_t* message, DWORD lastError);
