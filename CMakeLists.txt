@@ -31,7 +31,6 @@ FetchContent_Declare(spdlog
 FetchContent_MakeAvailable(spdlog)
 
 add_executable(VirtualDesktop WIN32
-    DesktopManager.cpp
     Logging.cpp
     "Virtual Desktop.cpp"
     "Virtual DesktopDlg.cpp"

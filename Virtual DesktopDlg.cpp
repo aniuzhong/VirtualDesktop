@@ -1,7 +1,7 @@
 #include "stdafx.h"
+#include "wilx/desktops.h"
 #include "wilx/win32_helpers.h"
 #include "resource.h"
-#include "DesktopManager.h"
 #include "Virtual DesktopDlg.h"
 
 static const UINT WM_TRAYICON_NOTIFY_MESSAGE = RegisterWindowMessageW(L"WM_TRAYICON_NOTIFY_MESSAGE-{8DDBE93E-DFE8-4279-934E-05C39902F37D}");
@@ -27,6 +27,89 @@ namespace
     bool IsVerifyChecked(void)
     {
         return IsDlgButtonChecked(g_hDlg, IDC_VERIFY_CHECK) == BST_CHECKED;
+    }
+
+    std::vector<std::wstring> GetDesktopNames(void)
+    {
+        HWINSTA hWindowsStation = GetProcessWindowStation();
+        if (NULL == hWindowsStation)
+        {
+            LogError(L"GetProcessWindowStation failed", GetLastError());
+            return {};
+        }
+
+        std::vector<std::wstring> desktopNames;
+        wilx::for_each_desktop_nothrow(hWindowsStation, [&](PCWSTR lpszDesktopName) {
+            desktopNames.emplace_back(lpszDesktopName);
+        });
+        return desktopNames;
+    }
+
+    bool IsCurrentDesktop(const std::wstring& desktopName)
+    {
+        std::wstring currentName = wilx::TryGetThreadDesktopName();
+        if (currentName.empty())
+            return false;
+        return _wcsicmp(desktopName.c_str(), currentName.c_str()) == 0;
+    }
+
+    constexpr std::wstring_view ExecutableExtensions[] = { L".exe", L".com", L".pif", L".scr" };
+
+    void LaunchApplication(const std::wstring& applicationFilePath, const std::wstring& desktopName)
+    {
+        std::wstring extension = std::filesystem::path(applicationFilePath).extension();
+        std::transform(extension.begin(), extension.end(), extension.begin(), ::towlower);
+        if (std::find(std::begin(ExecutableExtensions), std::end(ExecutableExtensions), extension) == std::end(ExecutableExtensions))
+        {
+            LogError(L"Invalid file extension", 0);
+            return;
+        }
+
+        std::wstring directoryName = std::filesystem::path(applicationFilePath).parent_path().wstring();
+
+        LogInfo(std::format(L"launch '{}' on desktop '{}'", applicationFilePath, desktopName));
+
+        wil::unique_process_information processInfo;
+        STARTUPINFOW sInfo = { 0 };
+        sInfo.cb = sizeof(sInfo);
+        sInfo.lpDesktop = const_cast<LPWSTR>(desktopName.c_str());
+
+        if (!CreateProcessW(applicationFilePath.c_str(), NULL, NULL, NULL, TRUE,
+                NORMAL_PRIORITY_CLASS, NULL, directoryName.c_str(), &sInfo, &processInfo))
+        {
+            LogError(L"CreateProcess failed", GetLastError());
+        }
+    }
+
+    bool CreateDesktop(const std::wstring& desktopName)
+    {
+        if (desktopName.empty())
+            return false;
+
+        SECURITY_ATTRIBUTES sAttribute = { sizeof(SECURITY_ATTRIBUTES), NULL, TRUE };
+        wil::unique_hdesk hNewDesktop(::CreateDesktopW(desktopName.c_str(), NULL, NULL, DF_ALLOWOTHERACCOUNTHOOK, GENERIC_ALL, &sAttribute));
+        if (!hNewDesktop)
+        {
+            DWORD createError = GetLastError();
+            MessageBoxW(NULL, wilx::TryGetWin32ErrorMessage(createError).c_str(), TXT_MESSAGEBOX_TITLE, MB_ICONERROR | MB_TOPMOST | MB_TASKMODAL);
+            LogError(L"CreateDesktop failed", createError);
+            return false;
+        }
+
+        const std::vector<std::wstring> existingNames = GetDesktopNames();
+        const bool alreadyExists = std::any_of(existingNames.begin(), existingNames.end(),
+            [&desktopName](const std::wstring& existing) { return _wcsicmp(existing.c_str(), desktopName.c_str()) == 0; });
+        if (!alreadyExists)
+        {
+            std::wstring windowsDirectory;
+            if (FAILED(wil::GetWindowsDirectoryW(windowsDirectory)))
+                LogError(L"GetWindowsDirectory failed, skipping Explorer launch", GetLastError());
+            else
+                LaunchApplication(windowsDirectory + L"\\Explorer.Exe", desktopName);
+        }
+
+        LogInfo(std::format(L"desktop '{}' created", desktopName));
+        return true;
     }
 
     std::wstring GetSelectedDesktopName(void)
@@ -88,7 +171,7 @@ namespace
 
         SetForegroundWindow(g_hDlg);
 
-        if (DesktopManager::IsCurrentDesktop(desktopName))
+        if (IsCurrentDesktop(desktopName))
         {
             MessageBoxW(g_hDlg, L"You are currently on the same Desktop.", TXT_MESSAGEBOX_TITLE, MB_ICONINFORMATION | MB_TOPMOST | MB_TASKMODAL);
             return;
@@ -101,18 +184,34 @@ namespace
                 return;
         }
 
-        if (DesktopManager::SwitchDesktop(desktopName))
+        wil::unique_hdesk hDesktopToSwitch(OpenDesktopW(desktopName.c_str(), DF_ALLOWOTHERACCOUNTHOOK, TRUE, GENERIC_ALL));
+        if (!hDesktopToSwitch)
         {
-            std::wstring appName = wil::GetModuleFileNameW<std::wstring>(nullptr);
-            DesktopManager::LaunchApplication(appName, desktopName);
-            LogInfo(L"self relaunched on target desktop, this instance exits");
-            DestroyWindow(g_hDlg);
+            DWORD openError = GetLastError();
+            if (ERROR_ACCESS_DENIED == openError)
+            {
+                std::wstring errorMsg = std::format(L"Failed to switch to {} desktop.\n\t {}",
+                    desktopName, wilx::TryGetWin32ErrorMessage(openError));
+                MessageBoxW(NULL, errorMsg.c_str(), TXT_MESSAGEBOX_TITLE, MB_ICONINFORMATION | MB_TOPMOST | MB_TASKMODAL);
+            }
+            LogError(L"OpenDesktop failed", openError);
+            return;
         }
+
+        if (!::SwitchDesktop(hDesktopToSwitch.get()))
+        {
+            LogError(L"SwitchDesktop failed", GetLastError());
+            return;
+        }
+
+        LaunchApplication(wil::GetModuleFileNameW<std::wstring>(nullptr), desktopName);
+        LogInfo(L"self relaunched on target desktop, this instance exits");
+        DestroyWindow(g_hDlg);
     }
 
     void ShowManageDesktopsDialog(void)
     {
-        const std::vector<std::wstring> desktopNames = DesktopManager::GetDesktopNames();
+        const std::vector<std::wstring> desktopNames = GetDesktopNames();
         SendMessageW(g_hDesktopList, LB_RESETCONTENT, 0, 0);
         for (const std::wstring& name : desktopNames)
             SendMessageW(g_hDesktopList, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(name.c_str()));
@@ -165,7 +264,7 @@ namespace
             if (LB_ERR != SendMessageW(g_hDesktopList, LB_SELECTSTRING, 0, reinterpret_cast<LPARAM>(name.c_str())))
                 MessageBoxW(g_hDlg, L"Desktop already created !", TXT_MESSAGEBOX_TITLE, MB_ICONEXCLAMATION | MB_TOPMOST | MB_TASKMODAL);
 
-            if (DesktopManager::CreateDesktop(name))
+            if (CreateDesktop(name))
             {
                 if (IDYES == MessageBoxW(g_hDlg, L"New Desktop is been created.\nWould you like to switch to new desktop ?", TXT_MESSAGEBOX_TITLE, MB_YESNO | MB_ICONINFORMATION | MB_TOPMOST | MB_TASKMODAL))
                     SwitchDesktopTo(name);
@@ -200,13 +299,13 @@ namespace
         POINT pt;
         GetCursorPos(&pt);
 
-        const std::vector<std::wstring> desktopNames = DesktopManager::GetDesktopNames();
+        const std::vector<std::wstring> desktopNames = GetDesktopNames();
 
         wil::unique_hmenu hContextMenu(CreatePopupMenu());
 
         for (size_t iMenuItem = 0; iMenuItem < desktopNames.size(); iMenuItem++)
         {
-            UINT flags = MF_STRING | MF_ENABLED | (DesktopManager::IsCurrentDesktop(desktopNames[iMenuItem]) ? MF_CHECKED : 0);
+            UINT flags = MF_STRING | MF_ENABLED | (IsCurrentDesktop(desktopNames[iMenuItem]) ? MF_CHECKED : 0);
             AppendMenuW(hContextMenu.get(), flags, CONTEXT_MENU_IDS + static_cast<UINT>(iMenuItem), desktopNames[iMenuItem].c_str());
         }
 
@@ -275,7 +374,7 @@ namespace
 
         CheckDlgButton(hDlg, IDC_VERIFY_CHECK, BST_CHECKED);
 
-        LogInfo(std::format(L"initialized, {} desktop(s) available", DesktopManager::GetDesktopNames().size()));
+        LogInfo(std::format(L"initialized, {} desktop(s) available", GetDesktopNames().size()));
     }
 
     INT_PTR CALLBACK VirtualDesktopDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
