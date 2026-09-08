@@ -1,7 +1,8 @@
-#include "stdafx.h"
+#include "pch.h"
 #include "wilx/desktops.h"
 #include "wilx/win32_helpers.h"
 #include "resource.h"
+#include "ui_text.h"
 #include "dialog.h"
 
 void SwitchBackToDefault(const wchar_t* reason);
@@ -133,7 +134,7 @@ namespace
         {
             DWORD createError = GetLastError();
             LogError(std::format(L"[create] CreateDesktopW('{}') failed", desktopName), createError);
-            MessageBoxW(NULL, wilx::TryGetWin32ErrorMessage(createError).c_str(), TXT_MESSAGEBOX_TITLE, MB_ICONERROR | MB_TOPMOST | MB_TASKMODAL);
+            MessageBoxW(NULL, wilx::TryGetWin32ErrorMessage(createError).c_str(), ui::kTitle, MB_ICONERROR | MB_TOPMOST | MB_TASKMODAL);
             return false;
         }
         LogInfo(std::format(L"[create] CreateDesktopW('{}') succeeded", desktopName));
@@ -187,7 +188,7 @@ namespace
             LogError(std::format(L"[create] desktop '{}' discarded (Explorer not seeded)", desktopName), 0);
             MessageBoxW(NULL,
                 std::format(L"Could not start Explorer on desktop '{}'. The desktop was not created.", desktopName).c_str(),
-                TXT_MESSAGEBOX_TITLE, MB_ICONERROR | MB_TOPMOST | MB_TASKMODAL);
+                ui::kTitle, MB_ICONERROR | MB_TOPMOST | MB_TASKMODAL);
             return false;
         }
 
@@ -236,7 +237,7 @@ namespace
         g_trayIcon.uCallbackMessage = WM_TRAYICON_NOTIFY_MESSAGE;
         g_trayIcon.uFlags = NIF_ICON | NIF_TIP | NIF_MESSAGE;
 
-        std::wstring tip = TXT_MESSAGEBOX_TITLE;
+        std::wstring tip = ui::kTitle;
         std::wstring currentDesktop = wilx::TryGetThreadDesktopName();
         if (!currentDesktop.empty())
             tip += std::format(L" [{} Desktop]", currentDesktop);
@@ -257,14 +258,14 @@ namespace
 
         if (IsCurrentDesktop(desktopName))
         {
-            MessageBoxW(g_hDlg, L"You are currently on the same Desktop.", TXT_MESSAGEBOX_TITLE, MB_ICONINFORMATION | MB_TOPMOST | MB_TASKMODAL);
+            MessageBoxW(g_hDlg, L"You are currently on the same Desktop.", ui::kTitle, MB_ICONINFORMATION | MB_TOPMOST | MB_TASKMODAL);
             return;
         }
 
         if (IsVerifyChecked())
         {
             std::wstring message = std::format(L"Are you sure to switch to '{}' Desktop ?", desktopName);
-            if (IDNO == MessageBoxW(g_hDlg, message.c_str(), TXT_MESSAGEBOX_TITLE, MB_YESNO | MB_ICONINFORMATION | MB_TOPMOST | MB_TASKMODAL))
+            if (IDNO == MessageBoxW(g_hDlg, message.c_str(), ui::kTitle, MB_YESNO | MB_ICONINFORMATION | MB_TOPMOST | MB_TASKMODAL))
                 return;
         }
 
@@ -276,7 +277,7 @@ namespace
             {
                 std::wstring errorMsg = std::format(L"Failed to switch to {} desktop.\n\t {}",
                     desktopName, wilx::TryGetWin32ErrorMessage(openError));
-                MessageBoxW(NULL, errorMsg.c_str(), TXT_MESSAGEBOX_TITLE, MB_ICONINFORMATION | MB_TOPMOST | MB_TASKMODAL);
+                MessageBoxW(NULL, errorMsg.c_str(), ui::kTitle, MB_ICONINFORMATION | MB_TOPMOST | MB_TASKMODAL);
             }
             LogError(std::format(L"[switch] OpenDesktopW('{}') failed", desktopName), openError);
             return;
@@ -404,18 +405,18 @@ namespace
 
             if (name.empty())
             {
-                MessageBoxW(g_hDlg, L"Please enter Desktop Name", TXT_MESSAGEBOX_TITLE, MB_ICONEXCLAMATION | MB_TOPMOST | MB_TASKMODAL);
+                MessageBoxW(g_hDlg, L"Please enter Desktop Name", ui::kTitle, MB_ICONEXCLAMATION | MB_TOPMOST | MB_TASKMODAL);
                 SetWindowTextW(g_hDesktopName, L"");
                 SetFocus(g_hDesktopName);
                 return;
             }
 
             if (LB_ERR != SendMessageW(g_hDesktopList, LB_SELECTSTRING, 0, reinterpret_cast<LPARAM>(name.c_str())))
-                MessageBoxW(g_hDlg, L"Desktop already created !", TXT_MESSAGEBOX_TITLE, MB_ICONEXCLAMATION | MB_TOPMOST | MB_TASKMODAL);
+                MessageBoxW(g_hDlg, L"Desktop already created !", ui::kTitle, MB_ICONEXCLAMATION | MB_TOPMOST | MB_TASKMODAL);
 
             if (CreateDesktop(name))
             {
-                if (IDYES == MessageBoxW(g_hDlg, L"New Desktop is been created.\nWould you like to switch to new desktop ?", TXT_MESSAGEBOX_TITLE, MB_YESNO | MB_ICONINFORMATION | MB_TOPMOST | MB_TASKMODAL))
+                if (IDYES == MessageBoxW(g_hDlg, L"New Desktop is been created.\nWould you like to switch to new desktop ?", ui::kTitle, MB_YESNO | MB_ICONINFORMATION | MB_TOPMOST | MB_TASKMODAL))
                     SwitchDesktopTo(name);
 
                 SendMessageW(g_hDesktopList, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(name.c_str()));
@@ -461,12 +462,12 @@ namespace
         if (!desktopNames.empty())
             AppendMenuW(hContextMenu.get(), MF_ENABLED | MF_SEPARATOR, SEPARATOR_MENU_ID, nullptr);
 
-        AppendMenuW(hContextMenu.get(), MF_ENABLED | MF_STRING | (IsVerifyChecked() ? MF_CHECKED : 0), VERIFY_SWITCH_MENU_ID, TXT_CONFIRM_MENU_ITEM);
-        AppendMenuW(hContextMenu.get(), MF_ENABLED | MF_STRING, MANAGE_DESKTOP_MENU_ID, TXT_MANAGE_DESKTOP_MENU_ITEM);
+        AppendMenuW(hContextMenu.get(), MF_ENABLED | MF_STRING | (IsVerifyChecked() ? MF_CHECKED : 0), VERIFY_SWITCH_MENU_ID, ui::kConfirmSwitchMenuItem);
+        AppendMenuW(hContextMenu.get(), MF_ENABLED | MF_STRING, MANAGE_DESKTOP_MENU_ID, ui::kManageDesktopsMenuItem);
         AppendMenuW(hContextMenu.get(), MF_ENABLED | MF_SEPARATOR, SEPARATOR_MENU_ID, nullptr);
-        AppendMenuW(hContextMenu.get(), MF_ENABLED | MF_STRING, IDM_ABOUTBOX, TXT_ABOUT_MENU_ITEM);
+        AppendMenuW(hContextMenu.get(), MF_ENABLED | MF_STRING, IDM_ABOUTBOX, ui::kAboutMenuItem);
         AppendMenuW(hContextMenu.get(), MF_ENABLED | MF_SEPARATOR, SEPARATOR_MENU_ID, nullptr);
-        AppendMenuW(hContextMenu.get(), MF_ENABLED | MF_STRING, EXIT_MENU_ID, TXT_EXIT_MENU_ITEM);
+        AppendMenuW(hContextMenu.get(), MF_ENABLED | MF_STRING, EXIT_MENU_ID, ui::kExitMenuItem);
 
         SetForegroundWindow(g_hDlg);
         int iSelectedIndex = TrackPopupMenuEx(hContextMenu.get(), TPM_TOPALIGN | TPM_VERPOSANIMATION | TPM_RETURNCMD, pt.x, pt.y, g_hDlg, nullptr);
@@ -516,7 +517,7 @@ namespace
         if (!AddTrayIcon(hDlg))
         {
             LogError(L"[startup] failed to add tray icon");
-            MessageBoxW(hDlg, L"Failed to set tray icon.", TXT_MESSAGEBOX_TITLE, MB_ICONINFORMATION | MB_TOPMOST | MB_TASKMODAL);
+            MessageBoxW(hDlg, L"Failed to set tray icon.", ui::kTitle, MB_ICONINFORMATION | MB_TOPMOST | MB_TASKMODAL);
             SwitchBackToDefault(L"tray icon failed");
             PostQuitMessage(-1);
             return;

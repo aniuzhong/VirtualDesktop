@@ -1,7 +1,6 @@
 # wilx
 
-Header-only, WIL-style extensions for Virtual Desktop, organized like wil:
-machinery earns a header, single-pattern helpers live in the drawer.
+Header-only, WIL-style extensions for Virtual Desktop.
 
 ## House rules
 

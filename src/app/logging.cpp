@@ -1,4 +1,4 @@
-#include "stdafx.h"
+#include "pch.h"
 #include <shlobj.h>
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/rotating_file_sink.h>

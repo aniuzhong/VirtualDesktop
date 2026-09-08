@@ -1,4 +1,5 @@
-#include "stdafx.h"
+#include "pch.h"
+#include "ui_text.h"
 #include "dialog.h"
 
 namespace
@@ -28,7 +29,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR,
     if (!created || (alreadyExists && !residentHandoff) || ERROR_ACCESS_DENIED == mutexError)
     {
         LogWarn(std::format(L"another instance is running (mutex error {}), exiting", mutexError));
-        MessageBoxW(nullptr, L"One instance of this application is already running.", TXT_MESSAGEBOX_TITLE, MB_OK);
+        MessageBoxW(nullptr, L"One instance of this application is already running.", ui::kTitle, MB_OK);
         return 0;
     }
 

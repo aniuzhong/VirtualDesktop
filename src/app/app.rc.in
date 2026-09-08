@@ -57,6 +57,13 @@ IDR_MAINFRAME           ICON                    "@WILX_APP_ICON@"
 
 /////////////////////////////////////////////////////////////////////////////
 //
+// Manifest
+//
+
+CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "@WILX_APP_MANIFEST@"
+
+/////////////////////////////////////////////////////////////////////////////
+//
 // Dialog
 //
 
@@ -66,13 +73,13 @@ CAPTION "About Virtual Desktop"
 FONT 8, "MS Shell Dlg", 0, 0, 0x1
 BEGIN
     ICON            IDR_MAINFRAME,IDC_STATIC,11,17,20,20
-    LTEXT           "Virtual Desktop Version 1.0",IDC_STATIC,40,10,119,8,SS_NOPREFIX
+    LTEXT           "Virtual Desktop Version @PROJECT_VERSION@",IDC_STATIC,40,10,119,8,SS_NOPREFIX
     LTEXT           "Created By :- Mallinath Karkanti \n\r\t         (Mallinathk@gmail.com)",IDC_STATIC,40,25,163,23
     DEFPUSHBUTTON   "OK",IDOK,178,7,50,16,WS_GROUP
 END
 
 IDD_VIRTUALDESKTOP_DIALOG DIALOGEX 0, 0, 306, 109
-STYLE DS_SYSMODAL | DS_SETFONT | DS_MODALFRAME | DS_SETFOREGROUND | DS_3DLOOK | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+STYLE DS_SETFONT | DS_MODALFRAME | DS_SETFOREGROUND | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
 EXSTYLE WS_EX_TOPMOST | WS_EX_WINDOWEDGE | WS_EX_APPWINDOW
 CAPTION "Virtual Desktop !"
 FONT 8, "MS Shell Dlg", 0, 0, 0x1
@@ -109,13 +116,11 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "TODO: <Company name>"
-            VALUE "FileDescription", "TODO: <File description>"
+            VALUE "FileDescription", "Virtual Desktop"
             VALUE "FileVersion", "@PROJECT_VERSION@"
             VALUE "InternalName", "Virtual Desktop.exe"
-            VALUE "LegalCopyright", "TODO: (c) <Company name>.  All rights reserved."
             VALUE "OriginalFilename", "Virtual Desktop.exe"
-            VALUE "ProductName", "TODO: <Product name>"
+            VALUE "ProductName", "Virtual Desktop"
             VALUE "ProductVersion", "@PROJECT_VERSION@"
         END
     END

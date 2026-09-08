@@ -1,7 +1,8 @@
 #pragma once
 
-#define WINVER 0x0601
-#define _WIN32_WINNT 0x0601
+// Windows 10 and up.
+#define WINVER 0x0A00
+#define _WIN32_WINNT 0x0A00
 
 #define NOMINMAX
 #include <windows.h>
@@ -21,8 +22,7 @@
 #include <wil/stl.h>
 #include <wil/win32_helpers.h>
 
-#include "CommonDef.h"
 #include "logging.h"
 
-#pragma comment(linker, "/manifestdependency:\"type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
-#pragma comment(lib, "Comctl32.lib")
+// Common Controls v6 activation and DPI awareness live in app.manifest,
+// embedded via the .rc; Comctl32 is linked by CMake.
