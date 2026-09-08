@@ -1,12 +1,8 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(VirtualDesktop LANGUAGES CXX RC)
-
-set(CMAKE_CXX_STANDARD 23)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
+project(VirtualDesktop VERSION 1.0.0.1 LANGUAGES CXX RC)
 
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/$<CONFIG>)
 
 include(FetchContent)
@@ -30,21 +26,8 @@ FetchContent_Declare(spdlog
 )
 FetchContent_MakeAvailable(spdlog)
 
-add_executable(VirtualDesktop WIN32
-    Logging.cpp
-    "Virtual Desktop.cpp"
-    "Virtual DesktopDlg.cpp"
-    "Virtual Desktop.rc"
-    "res/Virtual Desktop.ico"
-)
-target_include_directories(VirtualDesktop PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(VirtualDesktop PRIVATE WIL::WIL spdlog::spdlog)
-target_precompile_headers(VirtualDesktop PRIVATE stdafx.h)
-target_compile_definitions(VirtualDesktop PRIVATE UNICODE _UNICODE _WINDOWS)
-target_compile_options(VirtualDesktop PRIVATE /W4)
-set_target_properties(VirtualDesktop PROPERTIES
-    OUTPUT_NAME "Virtual Desktop"
-    VS_GLOBAL_KEYWORD "Win32Proj"
-)
+enable_testing()
 
-set_property(TARGET VirtualDesktop PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
+add_subdirectory(libs/wilx)
+add_subdirectory(app)
+add_subdirectory(tests)

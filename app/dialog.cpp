@@ -2,7 +2,7 @@
 #include "wilx/desktops.h"
 #include "wilx/win32_helpers.h"
 #include "resource.h"
-#include "Virtual DesktopDlg.h"
+#include "dialog.h"
 
 static const UINT WM_TRAYICON_NOTIFY_MESSAGE = RegisterWindowMessageW(L"WM_TRAYICON_NOTIFY_MESSAGE-{8DDBE93E-DFE8-4279-934E-05C39902F37D}");
 

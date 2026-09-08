@@ -1,5 +1,5 @@
 #include "stdafx.h"
-#include "Virtual DesktopDlg.h"
+#include "dialog.h"
 
 namespace
 {

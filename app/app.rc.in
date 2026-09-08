@@ -38,18 +38,8 @@ BEGIN
     "\0"
 END
 
-3 TEXTINCLUDE 
+3 TEXTINCLUDE
 BEGIN
-    "#define _AFX_NO_SPLITTER_RESOURCES\r\n"
-    "#define _AFX_NO_OLE_RESOURCES\r\n"
-    "#define _AFX_NO_TRACKER_RESOURCES\r\n"
-    "#define _AFX_NO_PROPERTY_RESOURCES\r\n"
-    "\r\n"
-    "#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)\r\n"
-    "LANGUAGE 9,  1\r\n"
-    "#pragma code_page(1252)\r\n"
-    "#include ""res\\VirtualDesktop.rc2""  // non-Microsoft Visual C++ edited resources\r\n"
-    "#endif\r\n"
     "\0"
 END
 
@@ -63,7 +53,7 @@ END
 
 // Icon with lowest ID value placed first to ensure application icon
 // remains consistent on all systems.
-IDR_MAINFRAME           ICON                    "res\\Virtual Desktop.ico"
+IDR_MAINFRAME           ICON                    "@WILX_APP_ICON@"
 
 /////////////////////////////////////////////////////////////////////////////
 //
@@ -103,8 +93,8 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,0,0,1
- PRODUCTVERSION 1,0,0,1
+ FILEVERSION @PROJECT_VERSION_MAJOR@,@PROJECT_VERSION_MINOR@,@PROJECT_VERSION_PATCH@,@PROJECT_VERSION_TWEAK@
+ PRODUCTVERSION @PROJECT_VERSION_MAJOR@,@PROJECT_VERSION_MINOR@,@PROJECT_VERSION_PATCH@,@PROJECT_VERSION_TWEAK@
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -121,12 +111,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "TODO: <Company name>"
             VALUE "FileDescription", "TODO: <File description>"
-            VALUE "FileVersion", "1.0.0.1"
+            VALUE "FileVersion", "@PROJECT_VERSION@"
             VALUE "InternalName", "Virtual Desktop.exe"
             VALUE "LegalCopyright", "TODO: (c) <Company name>.  All rights reserved."
             VALUE "OriginalFilename", "Virtual Desktop.exe"
             VALUE "ProductName", "TODO: <Product name>"
-            VALUE "ProductVersion", "1.0.0.1"
+            VALUE "ProductVersion", "@PROJECT_VERSION@"
         END
     END
     BLOCK "VarFileInfo"
@@ -175,25 +165,4 @@ END
 
 #endif    // English (U.S.) resources
 /////////////////////////////////////////////////////////////////////////////
-
-
-
-#ifndef APSTUDIO_INVOKED
-/////////////////////////////////////////////////////////////////////////////
-//
-// Generated from the TEXTINCLUDE 3 resource.
-//
-#define _AFX_NO_SPLITTER_RESOURCES
-#define _AFX_NO_OLE_RESOURCES
-#define _AFX_NO_TRACKER_RESOURCES
-#define _AFX_NO_PROPERTY_RESOURCES
-
-#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
-LANGUAGE 9,  1
-#pragma code_page(1252)
-#include "res\VirtualDesktop.rc2"  // non-Microsoft Visual C++ edited resources
-#endif
-
-/////////////////////////////////////////////////////////////////////////////
-#endif    // not APSTUDIO_INVOKED
 
