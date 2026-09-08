@@ -1,7 +1,6 @@
 #include "stdafx.h"
 #include "wilx/windowing.h"
 #include "wilx/shell.h"
-#include "wilx/strings.h"
 #include "resource.h"
 #include "DesktopManager.h"
 #include "RegSettings.h"
@@ -87,7 +86,7 @@ namespace
         if (desktopName.empty())
             return;
 
-        spdlog::info("switch to desktop '{}'", wilx::TryGetUtf8String(desktopName));
+        LogInfo(std::format(L"switch to desktop '{}'", desktopName));
 
         SetForegroundWindow(g_hDlg);
 
@@ -108,7 +107,7 @@ namespace
         {
             std::wstring appName = wil::GetModuleFileNameW<std::wstring>(nullptr);
             DesktopManager::LaunchApplication(appName, desktopName);
-            spdlog::info("self relaunched on target desktop, this instance exits");
+            LogInfo(L"self relaunched on target desktop, this instance exits");
             DestroyWindow(g_hDlg);
         }
     }
@@ -276,7 +275,7 @@ namespace
 
         if (!AddTrayIcon(hDlg))
         {
-            spdlog::error("failed to add tray icon");
+            LogError(L"failed to add tray icon");
             MessageBoxW(hDlg, L"Failed to set tray icon.", TXT_MESSAGEBOX_TITLE, MB_ICONINFORMATION | MB_TOPMOST | MB_TASKMODAL);
             PostQuitMessage(-1);
             return;
@@ -285,7 +284,7 @@ namespace
         CheckDlgButton(hDlg, IDC_VERIFY_CHECK,
             RegSettings::ReadProfileInt(REG_KEY_COMMON_SETTINGS, REG_SUB_KEY_CONFIRM_SWITCH, 1) ? BST_CHECKED : BST_UNCHECKED);
 
-        spdlog::info("initialized, {} desktop(s) available", DesktopManager::GetDesktopCount());
+        LogInfo(std::format(L"initialized, {} desktop(s) available", DesktopManager::GetDesktopCount()));
     }
 
     INT_PTR CALLBACK VirtualDesktopDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
@@ -353,7 +352,7 @@ namespace
             break;
 
         case WM_DESTROY:
-            spdlog::info("instance exiting");
+            LogInfo(L"instance exiting");
             g_trayIcon.reset();
             g_hDlg = nullptr;
             PostQuitMessage(0);

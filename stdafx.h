@@ -17,15 +17,13 @@
 #include <string_view>
 #include <vector>
 
-#include <spdlog/spdlog.h>
-#include <spdlog/sinks/rotating_file_sink.h>
-
 #include <wil/resource.h>
 #include <wil/registry.h>
 #include <wil/stl.h>
 #include <wil/win32_helpers.h>
 
 #include "CommonDef.h"
+#include "Logging.h"
 
 #pragma comment(linker, "/manifestdependency:\"type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
 #pragma comment(lib, "Comctl32.lib")

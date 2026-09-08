@@ -7,6 +7,3 @@
 #define TXT_EXIT_MENU_ITEM                             L"&Exit"
 #define REG_KEY_COMMON_SETTINGS                        L"CommonSettings"
 #define REG_SUB_KEY_CONFIRM_SWITCH                     L"ConfirmSwitch"
-
-// GlobalFunctions.cpp
-void LogErrorMessage(PCWSTR message, DWORD lastError);
