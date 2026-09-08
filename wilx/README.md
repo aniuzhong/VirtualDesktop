@@ -1,7 +1,7 @@
 # wilx
 
-Header-only, WIL-style extensions for Virtual Desktop. One theme per header,
-organized like wil: `details` trampolines, thin public APIs.
+Header-only, WIL-style extensions for Virtual Desktop, organized like wil:
+machinery earns a header, single-pattern helpers live in the drawer.
 
 ## House rules
 
@@ -20,10 +20,7 @@ organized like wil: `details` trampolines, thin public APIs.
 | File | Theme |
 |---|---|
 | `desktops.h` | Desktop enumeration (`for_each_desktop`) — earned by its trampoline machinery |
-| `win32_helpers.h` | Default drawer for single-pattern Win32 helpers (user-object name queries, error-message formatting) |
-| `strings.h` | UTF-16 → UTF-8 conversion |
-| `windowing.h` | Window/control text queries |
-| `shell.h` | Tray icon RAII — `unique_notify_icon_data`, a `wil::unique_struct` alias |
+| `win32_helpers.h` | The drawer: user-object name queries, error-message formatting, UTF-8 conversion, window text, tray icon RAII |
 
 `unique_notify_icon_data`: fill the fields (including `cbSize`), `NIM_ADD` it,
 and keep the object alive for as long as the icon should exist; deleting a
@@ -40,6 +37,7 @@ header that owns the name.
 | Failure contract | `Get*` throws on failure; `TryGet*` fail-soft, failure returned as data; `*NoThrow` / `*_nothrow` = exceptions banned, failure via return value |
 | Ownership | `unique_*` / `shared_*` = RAII; the handle type encodes the deleter |
 | Shape | `for_each_*` = callback-driven algorithm; callback returns void (continue), bool (false stops), or HRESULT (S_OK continues) |
+| API mirroring | The `W` suffix is kept iff the wrapped API has W/A duality and the function is (a narrowing of) that API (`TrySearchPathW`); narrowings and multi-API composites are descriptive without `W` (`TryGetUserObjectName`, `TryGetWindowText`) |
 | Placement | A theme header is earned by machinery or mass; single-pattern helpers go to `win32_helpers.h` |
 
 ## Failure regime

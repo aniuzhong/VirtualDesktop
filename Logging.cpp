@@ -3,7 +3,6 @@
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/rotating_file_sink.h>
 #include "wilx/win32_helpers.h"
-#include "wilx/strings.h"
 
 namespace
 {

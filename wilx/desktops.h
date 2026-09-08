@@ -1,7 +1,9 @@
 //*********************************************************
 //
 //    wilx - WIL-style extensions for Virtual Desktop.
-//    Header-only, one theme per header, shaped after wil.
+//    Header-only, shaped after wil: machinery earns a
+//    header (the trampolines below), single-pattern
+//    helpers live in the win32_helpers.h drawer.
 //    API contracts: wilx/README.md. Comments here only
 //    explain choices the code cannot show.
 //

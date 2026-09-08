@@ -1,6 +1,5 @@
 #include "stdafx.h"
-#include "wilx/windowing.h"
-#include "wilx/shell.h"
+#include "wilx/win32_helpers.h"
 #include "resource.h"
 #include "DesktopManager.h"
 #include "Virtual DesktopDlg.h"
@@ -72,7 +71,7 @@ namespace
         g_trayIcon.uFlags = NIF_ICON | NIF_TIP | NIF_MESSAGE;
 
         std::wstring tip = TXT_MESSAGEBOX_TITLE;
-        std::wstring currentDesktop = DesktopManager::GetCurrentDesktopName();
+        std::wstring currentDesktop = wilx::TryGetThreadDesktopName();
         if (!currentDesktop.empty())
             tip += std::format(L" [{} Desktop]", currentDesktop);
         wcsncpy_s(g_trayIcon.szTip, tip.c_str(), _TRUNCATE);
@@ -113,13 +112,10 @@ namespace
 
     void ShowManageDesktopsDialog(void)
     {
-        int iDeskCount = DesktopManager::GetDesktopCount();
+        const std::vector<std::wstring> desktopNames = DesktopManager::GetDesktopNames();
         SendMessageW(g_hDesktopList, LB_RESETCONTENT, 0, 0);
-        for (int i = 0; i < iDeskCount; i++)
-        {
-            std::wstring name = DesktopManager::GetDesktopName(i);
+        for (const std::wstring& name : desktopNames)
             SendMessageW(g_hDesktopList, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(name.c_str()));
-        }
 
         std::wstring selectedDesktopName = wilx::TryGetWindowText(g_hDesktopName);
 
@@ -204,19 +200,17 @@ namespace
         POINT pt;
         GetCursorPos(&pt);
 
-        int iDesktopCount = DesktopManager::GetDesktopCount();
+        const std::vector<std::wstring> desktopNames = DesktopManager::GetDesktopNames();
 
         wil::unique_hmenu hContextMenu(CreatePopupMenu());
 
-        for (int iMenuItemCount = 0; iMenuItemCount < iDesktopCount; iMenuItemCount++)
+        for (size_t iMenuItem = 0; iMenuItem < desktopNames.size(); iMenuItem++)
         {
-            std::wstring desktopName = DesktopManager::GetDesktopName(iMenuItemCount);
-
-            UINT flags = MF_STRING | MF_ENABLED | (DesktopManager::IsCurrentDesktop(desktopName) ? MF_CHECKED : 0);
-            AppendMenuW(hContextMenu.get(), flags, CONTEXT_MENU_IDS + iMenuItemCount, desktopName.c_str());
+            UINT flags = MF_STRING | MF_ENABLED | (DesktopManager::IsCurrentDesktop(desktopNames[iMenuItem]) ? MF_CHECKED : 0);
+            AppendMenuW(hContextMenu.get(), flags, CONTEXT_MENU_IDS + static_cast<UINT>(iMenuItem), desktopNames[iMenuItem].c_str());
         }
 
-        if (iDesktopCount > 0)
+        if (!desktopNames.empty())
             AppendMenuW(hContextMenu.get(), MF_ENABLED | MF_SEPARATOR, SEPARATOR_MENU_ID, nullptr);
 
         AppendMenuW(hContextMenu.get(), MF_ENABLED | MF_STRING | (IsVerifyChecked() ? MF_CHECKED : 0), VERIFY_SWITCH_MENU_ID, TXT_CONFIRM_MENU_ITEM);
@@ -241,9 +235,9 @@ namespace
         }
         else if (iSelectedIndex >= static_cast<int>(CONTEXT_MENU_IDS))
         {
-            std::wstring desktopName = DesktopManager::GetDesktopName(iSelectedIndex - CONTEXT_MENU_IDS);
-            if (!desktopName.empty())
-                SwitchDesktopTo(desktopName);
+            const size_t desktopIndex = static_cast<size_t>(iSelectedIndex - static_cast<int>(CONTEXT_MENU_IDS));
+            if (desktopIndex < desktopNames.size())
+                SwitchDesktopTo(desktopNames[desktopIndex]);
         }
     }
 
@@ -281,7 +275,7 @@ namespace
 
         CheckDlgButton(hDlg, IDC_VERIFY_CHECK, BST_CHECKED);
 
-        LogInfo(std::format(L"initialized, {} desktop(s) available", DesktopManager::GetDesktopCount()));
+        LogInfo(std::format(L"initialized, {} desktop(s) available", DesktopManager::GetDesktopNames().size()));
     }
 
     INT_PTR CALLBACK VirtualDesktopDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)

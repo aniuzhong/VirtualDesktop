@@ -4,9 +4,7 @@
 
 namespace DesktopManager
 {
-    int GetDesktopCount(void);
-    std::wstring GetDesktopName(int iIndex);
-    std::wstring GetCurrentDesktopName(void);
+    std::vector<std::wstring> GetDesktopNames(void);
     bool IsCurrentDesktop(const std::wstring& desktopName);
     bool SwitchDesktop(const std::wstring& desktopName);
     bool CreateDesktop(const std::wstring& desktopName);

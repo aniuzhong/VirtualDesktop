@@ -7,8 +7,6 @@ namespace
 {
     constexpr std::wstring_view ExecutableExtensions[] = { L".exe", L".com", L".pif", L".scr" };
 
-    std::vector<std::wstring> g_desktopNames;
-
     bool IsExecutableFile(const std::wstring& filePath)
     {
         std::wstring extension = std::filesystem::path(filePath).extension();
@@ -26,48 +24,29 @@ namespace
         }
         return windowsDirectory;
     }
+}
 
-    void PopulateDesktopList(void)
+namespace DesktopManager
+{
+    std::vector<std::wstring> GetDesktopNames(void)
     {
         HWINSTA hWindowsStation = GetProcessWindowStation();
         if (NULL == hWindowsStation)
         {
             LogError(L"GetProcessWindowStation failed", GetLastError());
-            return;
+            return {};
         }
 
         std::vector<std::wstring> desktopNames;
         wilx::for_each_desktop_nothrow(hWindowsStation, [&](PCWSTR lpszDesktopName) {
             desktopNames.emplace_back(lpszDesktopName);
         });
-
-        g_desktopNames = std::move(desktopNames);
-    }
-}
-
-namespace DesktopManager
-{
-    int GetDesktopCount(void)
-    {
-        PopulateDesktopList();
-        return static_cast<int>(g_desktopNames.size());
-    }
-
-    std::wstring GetDesktopName(int iIndex)
-    {
-        if (iIndex < 0 || iIndex >= static_cast<int>(g_desktopNames.size()))
-            return std::wstring();
-        return g_desktopNames[iIndex];
-    }
-
-    std::wstring GetCurrentDesktopName(void)
-    {
-        return wilx::TryGetThreadDesktopName();
+        return desktopNames;
     }
 
     bool IsCurrentDesktop(const std::wstring& desktopName)
     {
-        std::wstring currentName = GetCurrentDesktopName();
+        std::wstring currentName = wilx::TryGetThreadDesktopName();
         if (currentName.empty())
             return false;
         return _wcsicmp(desktopName.c_str(), currentName.c_str()) == 0;
@@ -116,13 +95,13 @@ namespace DesktopManager
             return false;
         }
 
-        bool alreadyExists = std::any_of(g_desktopNames.begin(), g_desktopNames.end(),
+        const std::vector<std::wstring> existingNames = GetDesktopNames();
+        bool alreadyExists = std::any_of(existingNames.begin(), existingNames.end(),
             [&desktopName](const std::wstring& existing) { return _wcsicmp(existing.c_str(), desktopName.c_str()) == 0; });
         if (!alreadyExists)
             LaunchApplication(QueryWindowsDirectory() + L"\\Explorer.Exe", desktopName);
 
         LogInfo(std::format(L"desktop '{}' created", desktopName));
-        PopulateDesktopList();
         return true;
     }
 
