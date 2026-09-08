@@ -28,6 +28,6 @@ FetchContent_MakeAvailable(spdlog)
 
 enable_testing()
 
-add_subdirectory(libs/wilx)
-add_subdirectory(app)
+add_subdirectory(src/wilx)
+add_subdirectory(src/app)
 add_subdirectory(tests)

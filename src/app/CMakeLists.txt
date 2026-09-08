@@ -1,4 +1,4 @@
-set(WILX_APP_ICON "${CMAKE_CURRENT_SOURCE_DIR}/../assets/app.ico")
+set(WILX_APP_ICON "${CMAKE_CURRENT_SOURCE_DIR}/../../assets/app.ico")
 configure_file(app.rc.in app.rc @ONLY)
 
 add_executable(VirtualDesktop WIN32
