@@ -1,26 +1,14 @@
 //*********************************************************
 //
 //    wilx - WIL-style extensions for Virtual Desktop.
-//    One theme per header, header-only, mirroring wil's
-//    organization: details trampolines + thin public APIs.
-//    House rules: build on wil's public API only (wil::details
-//    is reference material, never a dependency); C++23 and up,
-//    no historical back-compat layers.
+//    Header-only, one theme per header, shaped after wil.
+//    API contracts: wilx/README.md. Comments here only
+//    explain choices the code cannot show.
 //
 //*********************************************************
 //! @file
-//! wilx Win32 helpers: user-object name queries (desktops and window
-//! stations) and Win32 error-message formatting. House regime of this
-//! header is wil's win32_helpers style: PascalCase with Get/TryGet
-//! failure markers.
-//!
-//! TryGet* = total fail-soft: an empty result means failure (insufficient
-//! rights / no input desktop / OOM), never an exception. This is broader
-//! than wil's TryGet family, which still surfaces unexpected failures
-//! through an HRESULT return or a throw; here every failure is folded
-//! into the empty result. An HRESULT nothrow core and Get* (throwing)
-//! overloads stay reserved until a caller needs to distinguish or
-//! propagate failures.
+//! User-object name queries and Win32 error messages. TryGet* here is
+//! total fail-soft (see wilx/README.md).
 #ifndef __WILX_WIN32_HELPERS_INCLUDED
 #define __WILX_WIN32_HELPERS_INCLUDED
 
@@ -32,8 +20,7 @@
 
 namespace wilx
 {
-//! UOI_NAME two-call size query; accepts HDESK and HWINSTA alike.
-//! Empty result == failure.
+//! Accepts HDESK and HWINSTA alike.
 [[nodiscard]] inline std::wstring TryGetUserObjectName(_In_ HANDLE userObject)
 {
     DWORD bytesNeeded = 0;
@@ -76,8 +63,6 @@ namespace wilx
     return TryGetUserObjectName(GetProcessWindowStation());
 }
 
-//! Formats a Win32 error code via FormatMessageW. Empty result == failure
-//! (no message for the code / OOM). Trailing CR/LF is trimmed.
 [[nodiscard]] inline std::wstring TryGetWin32ErrorMessage(DWORD error)
 {
     wil::unique_hlocal buffer;
@@ -96,8 +81,8 @@ namespace wilx
     return message;
 }
 
-//! Convenience overload reading the calling thread's last error code; call
-//! it immediately after the failing API, before anything clobbers it.
+//! Reads the calling thread's last error; call immediately after the failing
+//! API, before anything clobbers it.
 [[nodiscard]] inline std::wstring TryGetWin32ErrorMessage()
 {
     return TryGetWin32ErrorMessage(GetLastError());

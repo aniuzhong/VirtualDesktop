@@ -3,12 +3,31 @@
 Header-only, WIL-style extensions for Virtual Desktop. One theme per header,
 organized like wil: `details` trampolines, thin public APIs.
 
+## House rules
+
+- Build on wil's **public API only**; `wil::details` is reference material,
+  never a dependency — copy and own its evolution if ever truly needed.
+- C++23 and up: no historical back-compat layers.
+- A helper enters wilx only if it passes all three checks: no business
+  vocabulary in names or signatures, no touching app globals, and usable
+  as-is by any Win32 program. wilx provides primitives and failure semantics;
+  the app provides policy (caching, confirmation dialogs, relaunch logic).
+- Grow on demand: one failure regime until a caller needs another; no
+  speculative overloads.
+
 ## Files
 
 | File | Theme |
 |---|---|
 | `desktops.h` | Desktop enumeration (`for_each_desktop`) — earned by its trampoline machinery |
-| `win32_helpers.h` | Default drawer for single-pattern Win32 helpers (user-object name queries) |
+| `win32_helpers.h` | Default drawer for single-pattern Win32 helpers (user-object name queries, error-message formatting) |
+| `strings.h` | UTF-16 → UTF-8 conversion |
+| `windowing.h` | Window/control text queries |
+| `shell.h` | Tray icon RAII — `unique_notify_icon_data`, a `wil::unique_struct` alias |
+
+`unique_notify_icon_data`: fill the fields (including `cbSize`), `NIM_ADD` it,
+and keep the object alive for as long as the icon should exist; deleting a
+never-added icon fails harmlessly (`wil::unique_prop_variant` semantics).
 
 ## Naming grammar
 
@@ -23,9 +42,17 @@ header that owns the name.
 | Shape | `for_each_*` = callback-driven algorithm; callback returns void (continue), bool (false stops), or HRESULT (S_OK continues) |
 | Placement | A theme header is earned by machinery or mass; single-pattern helpers go to `win32_helpers.h` |
 
+## Failure regime
+
+`TryGet*` is total fail-soft: empty result == failure (invalid handle,
+insufficient rights, OOM), never an exception. Deliberately broader than wil's
+TryGet family, which still surfaces unexpected failures via HRESULT or throw;
+add an HRESULT nothrow core or `Get*` overloads only when a caller must
+distinguish or propagate failures.
+
 ## Deliberate deviations from wil
 
 - `std::` instead of wil's internal `wistd::`
-- `__cpp_exceptions` instead of `WIL_ENABLE_EXCEPTIONS`
-- C++20 concepts instead of `always_false` + `static_assert`
+- C++23 concepts instead of `always_false` + `static_assert`
 - No `W` suffix on invented composite names (reserved for API mirrors with A/W duality)
+- Total fail-soft `TryGet*` (wil's still surfaces unexpected failures)

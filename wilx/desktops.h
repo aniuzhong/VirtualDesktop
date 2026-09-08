@@ -1,15 +1,13 @@
 //*********************************************************
 //
 //    wilx - WIL-style extensions for Virtual Desktop.
-//    One theme per header, header-only, mirroring wil's
-//    organization: details trampolines + thin public APIs.
-//    House rules: build on wil's public API only (wil::details
-//    is reference material, never a dependency); C++23 and up,
-//    no historical back-compat layers.
+//    Header-only, one theme per header, shaped after wil.
+//    API contracts: wilx/README.md. Comments here only
+//    explain choices the code cannot show.
 //
 //*********************************************************
 //! @file
-//! wilx Desktops: for_each_desktop / for_each_desktop_nothrow over EnumDesktopsW.
+//! Desktop enumeration over EnumDesktopsW.
 #ifndef __WILX_DESKTOPS_INCLUDED
 #define __WILX_DESKTOPS_INCLUDED
 
@@ -24,9 +22,7 @@
 #if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
 namespace wilx
 {
-//! Callback contract: receives a PCWSTR into a system-owned buffer that is only
-//! valid for the duration of the callback. May return void (enumerate all),
-//! bool (return false to stop), or HRESULT (stop unless S_OK).
+//! PCWSTR passed to the callback is system-owned: valid only for its duration.
 template <typename TCallback>
 concept desktop_enum_callback =
     std::invocable<TCallback, PCWSTR> &&
@@ -86,6 +82,7 @@ namespace details
             }
             else if constexpr (std::is_same_v<result_t, HRESULT>)
             {
+                // NB: only S_OK continues the enumeration; any other HRESULT stops it
                 return (S_OK == (*pCallback)(lpszDesktopName)) ? TRUE : FALSE;
             }
             else

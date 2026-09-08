@@ -1,21 +1,13 @@
 //*********************************************************
 //
 //    wilx - WIL-style extensions for Virtual Desktop.
-//    One theme per header, header-only, mirroring wil's
-//    organization: details trampolines + thin public APIs.
-//    House rules: build on wil's public API only (wil::details
-//    is reference material, never a dependency); C++23 and up,
-//    no historical back-compat layers.
+//    Header-only, one theme per header, shaped after wil.
+//    API contracts: wilx/README.md. Comments here only
+//    explain choices the code cannot show.
 //
 //*********************************************************
 //! @file
-//! wilx Windowing: window/control text queries, complementing wil's
-//! for_each_window family in wil/windowing.h.
-//!
-//! House regime: TryGet* total fail-soft (see wilx/win32_helpers.h).
-//! GetWindowTextW does not distinguish "no text" from "failure" -- both
-//! yield zero -- so neither does TryGetWindowText: an empty result means
-//! either.
+//! Window/control text queries.
 #ifndef __WILX_WINDOWING_INCLUDED
 #define __WILX_WINDOWING_INCLUDED
 
@@ -26,8 +18,7 @@
 #if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
 namespace wilx
 {
-//! Two-call GetWindowTextLength/GetWindowTextW query. Empty result ==
-//! failure or empty text.
+//! GetWindowTextW does not distinguish "no text" from failure; neither does this.
 [[nodiscard]] inline std::wstring TryGetWindowText(_In_ HWND window)
 {
     const int length = GetWindowTextLengthW(window);

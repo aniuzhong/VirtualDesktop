@@ -22,7 +22,7 @@ namespace
         std::wstring windowsDirectory;
         if (FAILED(wil::GetWindowsDirectoryW(windowsDirectory)))
         {
-            DebugPrintErrorMessage(L"GetWindowsDirectory failed in QueryWindowsDirectory.", GetLastError());
+            LogErrorMessage(L"GetWindowsDirectory failed in QueryWindowsDirectory.", GetLastError());
             return {};
         }
         return windowsDirectory;
@@ -33,7 +33,7 @@ namespace
         HWINSTA hWindowsStation = GetProcessWindowStation();
         if (NULL == hWindowsStation)
         {
-            DebugPrintErrorMessage(L"GetProcessWindowStation failed in PopulateDesktopList.", GetLastError());
+            LogErrorMessage(L"GetProcessWindowStation failed in PopulateDesktopList.", GetLastError());
             return;
         }
 
@@ -89,13 +89,13 @@ namespace DesktopManager
                     desktopName, wilx::TryGetWin32ErrorMessage(openError));
                 MessageBoxW(NULL, errorMsg.c_str(), TXT_MESSAGEBOX_TITLE, MB_ICONINFORMATION | MB_TOPMOST | MB_TASKMODAL);
             }
-            DebugPrintErrorMessage(L"OpenDesktop failed in SwitchDesktop.", openError);
+            LogErrorMessage(L"OpenDesktop failed in SwitchDesktop.", openError);
             return false;
         }
 
         if (!::SwitchDesktop(hDesktopToSwitch.get()))
         {
-            DebugPrintErrorMessage(L"SwitchDesktop failed in SwitchDesktop.", GetLastError());
+            LogErrorMessage(L"SwitchDesktop failed in SwitchDesktop.", GetLastError());
             return false;
         }
 
@@ -113,7 +113,7 @@ namespace DesktopManager
         {
             DWORD createError = GetLastError();
             MessageBoxW(NULL, wilx::TryGetWin32ErrorMessage(createError).c_str(), TXT_MESSAGEBOX_TITLE, MB_ICONERROR | MB_TOPMOST | MB_TASKMODAL);
-            DebugPrintErrorMessage(L"CreateDesktop failed in CreateDesktop.", createError);
+            LogErrorMessage(L"CreateDesktop failed in CreateDesktop.", createError);
             return false;
         }
 
@@ -134,7 +134,7 @@ namespace DesktopManager
 
         if (!IsExecutableFile(applicationFilePath))
         {
-            DebugPrintErrorMessage(L"Invalid File Extension in LaunchApplication.", 0);
+            LogErrorMessage(L"Invalid File Extension in LaunchApplication.", 0);
             return false;
         }
 
@@ -159,7 +159,7 @@ namespace DesktopManager
                 &sInfo,
                 &processInfo))
         {
-            DebugPrintErrorMessage(L"CreateProcess failed in LaunchApplication.", GetLastError());
+            LogErrorMessage(L"CreateProcess failed in LaunchApplication.", GetLastError());
             return false;
         }
 

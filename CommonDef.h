@@ -9,4 +9,4 @@
 #define REG_SUB_KEY_CONFIRM_SWITCH                     L"ConfirmSwitch"
 
 // GlobalFunctions.cpp
-void DebugPrintErrorMessage(const wchar_t* message, DWORD lastError);
+void LogErrorMessage(PCWSTR message, DWORD lastError);
