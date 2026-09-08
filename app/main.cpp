@@ -11,27 +11,25 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR,
     InitLogging();
     LogInfo(std::format(L"==== virtual desktop starting, pid {} ====", GetCurrentProcessId()));
 
-    Sleep(1000);
-
-    // A hand-off from a switching instance (--reside) bypasses the mutex: the
-    // switcher serializes hand-offs by design and stays alive until this
-    // resident reports a healthy desktop. Plain launches keep the check.
+    // Every instance holds the single-instance mutex for its entire lifetime —
+    // that is what makes the check enforce anything at all. A hand-off
+    // resident (--reside) sees "already exists" because the switcher still
+    // holds the mutex during the hand-off; it keeps a duplicate handle
+    // instead of exiting, so enforcement survives the switcher's retirement.
+    const wchar_t singleInstanceMutex[] = L"Virtual_Desktop_{44D28BCA-7F46-4af2-A1FF-36EE0DAC7CD2}";
+    wil::unique_mutex_nothrow instanceMutex;
+    bool alreadyExists = false;
     const bool residentHandoff = std::wstring_view(GetCommandLineW()).find(L"--reside") != std::wstring_view::npos;
-    if (residentHandoff)
+    const bool created = instanceMutex.try_create(singleInstanceMutex, 0, MUTEX_ALL_ACCESS, nullptr, &alreadyExists);
+    const DWORD mutexError = GetLastError();
+    LogInfo(std::format(L"[startup] single-instance mutex: created={}, alreadyExists={}, hand-off={}",
+        created, alreadyExists, residentHandoff));
+
+    if (!created || (alreadyExists && !residentHandoff) || ERROR_ACCESS_DENIED == mutexError)
     {
-        LogInfo(L"[startup] resident hand-off, single-instance check skipped");
-    }
-    else
-    {
-        const wchar_t singleInstanceMutex[] = L"Virtual_Desktop_{44D28BCA-7F46-4af2-A1FF-36EE0DAC7CD2}";
-        wil::unique_mutex_nothrow instanceMutex;
-        bool alreadyExists = false;
-        if (!(instanceMutex.try_create(singleInstanceMutex, 0, MUTEX_ALL_ACCESS, nullptr, &alreadyExists) && !alreadyExists))
-        {
-            LogWarn(std::format(L"another instance is running (mutex error {}), exiting", GetLastError()));
-            MessageBoxW(nullptr, L"One instance of this application is already running.", TXT_MESSAGEBOX_TITLE, MB_OK);
-            return 0;
-        }
+        LogWarn(std::format(L"another instance is running (mutex error {}), exiting", mutexError));
+        MessageBoxW(nullptr, L"One instance of this application is already running.", TXT_MESSAGEBOX_TITLE, MB_OK);
+        return 0;
     }
 
     INITCOMMONCONTROLSEX initCtrls = { sizeof(initCtrls), ICC_WIN95_CLASSES };
