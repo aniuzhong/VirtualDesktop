@@ -1,13 +1,18 @@
 // wilx behavior tests: run via ctest, or the test_wilx executable directly.
 #include <windows.h>
 #include <wilx/desktops.h>
+#include <wilx/desktop_windows.h>
+#include <wilx/toolhelp.h>
+#include <wilx/window_stations.h>
 #include <wilx/win32_helpers.h>
 
+#include <cstdio>
 #include <string>
 #include <type_traits>
 #include <vector>
 
-#define CHECK(x) do { if (!(x)) { return 1; } } while (0)
+#define CHECK(x) \
+    do { if (!(x)) { std::printf("CHECK failed: %s (%s:%d)\n", #x, __FILE__, __LINE__); return 1; } } while (0)
 
 int main()
 {
@@ -26,6 +31,12 @@ int main()
         nullptr, nullptr, GetModuleHandleW(nullptr), nullptr);
     CHECK(window != nullptr);
     CHECK(wilx::TryGetWindowText(window) == L"hello");
+
+    // Window owner query: this thread created the window.
+    auto owner = wilx::TryGetWindowThreadProcessId(window);
+    CHECK(owner && owner->threadId == GetCurrentThreadId());
+    CHECK(owner && owner->processId == GetCurrentProcessId());
+    CHECK(!wilx::TryGetWindowThreadProcessId(nullptr).has_value());
     DestroyWindow(window);
 
     // Enumeration: non-empty, and a false-returning callback stops after one.
@@ -36,6 +47,44 @@ int main()
     size_t visited = 0;
     wilx::for_each_desktop_nothrow([&](PCWSTR) -> bool { ++visited; return false; });
     CHECK(visited == 1);
+
+    // Window station enumeration: an interactive session always sees some.
+    std::vector<std::wstring> stationNames;
+    wilx::for_each_window_station_nothrow([&](PCWSTR name) { stationNames.emplace_back(name); });
+    CHECK(!stationNames.empty());
+
+    // Desktop window enumeration on a desktop opened for reading.
+    wil::unique_hdesk inputDesktop(OpenInputDesktop(0, FALSE, DESKTOP_READOBJECTS));
+    CHECK(inputDesktop);
+    size_t windowsSeen = 0;
+    wilx::for_each_desktop_window_nothrow(inputDesktop.get(), [&](HWND) { ++windowsSeen; });
+    CHECK(windowsSeen > 0);
+
+    // Toolhelp: this process and this thread must appear; stop-on-false works.
+    bool foundSelfProcess = false;
+    wilx::for_each_process([&](const PROCESSENTRY32W& entry) {
+        foundSelfProcess = foundSelfProcess || entry.th32ProcessID == GetCurrentProcessId();
+        return true;
+    });
+    CHECK(foundSelfProcess);
+
+    bool foundSelfThread = false;
+    wilx::for_each_thread([&](const THREADENTRY32& entry) {
+        foundSelfThread = foundSelfThread || entry.th32ThreadID == GetCurrentThreadId();
+        return true;
+    });
+    CHECK(foundSelfThread);
+
+    // NoThrow cores carry the error code; tid 0 never resolves.
+    std::wstring desktopName;
+    DWORD nameError = 0;
+    CHECK(wilx::GetThreadDesktopNameNoThrow(GetCurrentThreadId(), desktopName, nameError));
+    CHECK(!desktopName.empty() && nameError == 0);
+    std::wstring badName;
+    DWORD badError = 0;
+    CHECK(!wilx::GetThreadDesktopNameNoThrow(0, badName, badError));
+    CHECK(badName.empty() && badError != 0);
+    CHECK(wilx::TryGetThreadDesktopName(GetCurrentThreadId()) == desktopName);
 
     static_assert(std::is_base_of_v<NOTIFYICONDATAW, wilx::unique_notify_icon_data>);
     wilx::unique_notify_icon_data icon;

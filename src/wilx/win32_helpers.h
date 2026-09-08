@@ -8,16 +8,17 @@
 //
 //*********************************************************
 //! @file
-//! The wilx drawer: user-object name queries, Win32 error
-//! messages, UTF-8 conversion, window text, and the tray icon
-//! RAII alias. TryGet* here is total fail-soft (see
-//! wilx/README.md).
+//! The wilx drawer: user-object name queries (TryGet* wrappers plus the
+//! NoThrow cores that carry the error code), Win32 error messages, UTF-8
+//! conversion, window text, window owner queries, and the tray icon RAII.
+//! TryGet* here is total fail-soft (see wilx/README.md).
 #ifndef __WILX_WIN32_HELPERS_INCLUDED
 #define __WILX_WIN32_HELPERS_INCLUDED
 
 #include <windows.h>
 #include <shellapi.h>
 #include <cstring>
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -25,42 +26,134 @@
 
 namespace wilx
 {
-//! Accepts HDESK and HWINSTA alike.
-[[nodiscard]] inline std::wstring TryGetUserObjectName(_In_ HANDLE userObject)
+//! NoThrow core behind the TryGet* name queries: callers that render or
+//! classify the failure (the desktop dump) need the error code, which the
+//! total fail-soft TryGet* regime deliberately discards. false == failure
+//! with *lastError set (0 is replaced: these user-object APIs fail without
+//! touching last error for null handles); true == *name filled (empty names
+//! do not occur for window stations or desktops).
+[[nodiscard]] inline bool GetUserObjectNameNoThrow(
+    _In_opt_ HANDLE userObject, _Out_ std::wstring& name, _Out_ DWORD& lastError)
 {
+    name.clear();
+
+    if (!userObject)
+    {
+        lastError = ERROR_INVALID_HANDLE;
+        return false;
+    }
+
     DWORD bytesNeeded = 0;
+    SetLastError(0);
     if (!GetUserObjectInformationW(userObject, UOI_NAME, nullptr, 0, &bytesNeeded) &&
         ERROR_INSUFFICIENT_BUFFER != GetLastError())
     {
-        return {};
+        lastError = GetLastError();
+        if (0 == lastError)
+            lastError = ERROR_INVALID_HANDLE;
+        return false;
     }
 
-    std::wstring name;
+    bool filled = false;
     name.resize_and_overwrite(bytesNeeded / sizeof(wchar_t) + 1, [&](wchar_t* buffer, size_t capacity) {
         if (!GetUserObjectInformationW(userObject, UOI_NAME, buffer,
             static_cast<DWORD>(capacity * sizeof(wchar_t)), &bytesNeeded))
         {
+            lastError = GetLastError();
+            if (0 == lastError)
+                lastError = ERROR_INVALID_HANDLE;
             return size_t{};
         }
+        filled = true;
         return std::wcslen(buffer);
     });
+    if (!filled)
+    {
+        return false;
+    }
+    lastError = 0; // success must not leak the probe call's expected ERROR_INSUFFICIENT_BUFFER
+    return true;
+}
+
+//! Accepts HDESK and HWINSTA alike.
+[[nodiscard]] inline std::wstring TryGetUserObjectName(_In_ HANDLE userObject)
+{
+    std::wstring name;
+    DWORD error = 0;
+    (void)GetUserObjectNameNoThrow(userObject, name, error);
     return name;
 }
 
 //! GetThreadDesktop handle is owned by the thread: never CloseDesktop it.
-[[nodiscard]] inline std::wstring TryGetThreadDesktopName()
+//! GetThreadDesktop fails silently (NULL, last error untouched) for threads
+//! it will not name — cross-session and pseudo entries — so capture its
+//! error explicitly and substitute when it did not set one.
+[[nodiscard]] inline bool GetThreadDesktopNameNoThrow(_In_ DWORD threadId, _Out_ std::wstring& name, _Out_ DWORD& lastError)
 {
-    return TryGetUserObjectName(GetThreadDesktop(GetCurrentThreadId()));
+    SetLastError(0);
+    const HANDLE desktop = GetThreadDesktop(threadId);
+    lastError = GetLastError();
+    if (!desktop)
+    {
+        name.clear();
+        if (0 == lastError)
+            lastError = ERROR_INVALID_HANDLE;
+        return false;
+    }
+    return GetUserObjectNameNoThrow(desktop, name, lastError);
 }
 
-[[nodiscard]] inline std::wstring TryGetInputDesktopName()
+[[nodiscard]] inline std::wstring TryGetThreadDesktopName(_In_ DWORD threadId)
+{
+    std::wstring name;
+    DWORD error = 0;
+    (void)GetThreadDesktopNameNoThrow(threadId, name, error);
+    return name;
+}
+
+[[nodiscard]] inline std::wstring TryGetThreadDesktopName()
+{
+    return TryGetThreadDesktopName(GetCurrentThreadId());
+}
+
+//! OpenInputDesktop result is owned here: never CloseDesktop it from outside.
+[[nodiscard]] inline bool GetInputDesktopNameNoThrow(_Out_ std::wstring& name, _Out_ DWORD& lastError)
 {
     wil::unique_hdesk inputDesktop(OpenInputDesktop(0, FALSE, DESKTOP_READOBJECTS));
     if (!inputDesktop)
     {
-        return {};
+        name.clear();
+        lastError = GetLastError();
+        return false;
     }
-    return TryGetUserObjectName(inputDesktop.get());
+    return GetUserObjectNameNoThrow(inputDesktop.get(), name, lastError);
+}
+
+[[nodiscard]] inline std::wstring TryGetInputDesktopName()
+{
+    std::wstring name;
+    DWORD error = 0;
+    (void)GetInputDesktopNameNoThrow(name, error);
+    return name;
+}
+
+struct WindowThreadProcessId
+{
+    DWORD threadId;
+    DWORD processId;
+};
+
+//! Mirrors GetThreadProcessId: a zero thread id means the window is invalid
+//! and both fields are meaningless.
+[[nodiscard]] inline std::optional<WindowThreadProcessId> TryGetWindowThreadProcessId(_In_opt_ HWND window)
+{
+    DWORD processId = 0;
+    const DWORD threadId = ::GetWindowThreadProcessId(window, &processId);
+    if (0 == threadId)
+    {
+        return std::nullopt;
+    }
+    return WindowThreadProcessId{threadId, processId};
 }
 
 [[nodiscard]] inline std::wstring TryGetProcessWindowStationName()
