@@ -16,6 +16,8 @@
 #include <type_traits>
 #include <utility>
 
+#include <wil/common.h>
+
 #if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
 namespace wilx
 {
@@ -43,7 +45,7 @@ namespace details
         }
         else if constexpr (std::is_same_v<result_t, HRESULT>)
         {
-            // NB: S_OK compares equal to ERROR_SUCCESS as both are 0
+            // NB: only S_OK continues the enumeration; any other HRESULT stops it
             return (S_OK == (*pCallback)(lpszDesktopName)) ? TRUE : FALSE;
         }
         else
@@ -58,7 +60,7 @@ namespace details
         enumApi(EnumDesktopsCallbackNoThrow<TCallback>, reinterpret_cast<LPARAM>(&callback));
     }
 
-#ifdef __cpp_exceptions
+#ifdef WIL_ENABLE_EXCEPTIONS
     template <desktop_enum_callback TCallback>
     struct EnumDesktopsCallbackData
     {
@@ -105,7 +107,7 @@ namespace details
             std::rethrow_exception(callbackData.exception);
         }
     }
-#endif // __cpp_exceptions
+#endif // WIL_ENABLE_EXCEPTIONS
 } // namespace details
 
 template <desktop_enum_callback TCallback>
@@ -127,7 +129,7 @@ void for_each_desktop_nothrow(_In_ HWINSTA hWindowStation, TCallback&& callback)
     details::DoEnumDesktopsNoThrow(boundEnumDesktops, std::forward<TCallback>(callback));
 }
 
-#ifdef __cpp_exceptions
+#ifdef WIL_ENABLE_EXCEPTIONS
 template <desktop_enum_callback TCallback>
 void for_each_desktop(TCallback&& callback)
 {
@@ -146,7 +148,7 @@ void for_each_desktop(_In_ HWINSTA hWindowStation, TCallback&& callback)
     };
     details::DoEnumDesktops(boundEnumDesktops, std::forward<TCallback>(callback));
 }
-#endif // __cpp_exceptions
+#endif // WIL_ENABLE_EXCEPTIONS
 } // namespace wilx
 #endif // WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
 #endif // __WILX_DESKTOPS_INCLUDED
