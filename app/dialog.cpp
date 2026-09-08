@@ -4,6 +4,8 @@
 #include "resource.h"
 #include "dialog.h"
 
+void SwitchBackToDefault(const wchar_t* reason);
+
 static const UINT WM_TRAYICON_NOTIFY_MESSAGE = RegisterWindowMessageW(L"WM_TRAYICON_NOTIFY_MESSAGE-{8DDBE93E-DFE8-4279-934E-05C39902F37D}");
 
 namespace
@@ -23,6 +25,11 @@ namespace
     HWND g_hSwitchToDesktop = nullptr;
 
     wilx::unique_notify_icon_data g_trayIcon;
+
+    // Set while a deliberate desktop switch is tearing this instance down, so
+    // WM_DESTROY does not switch the input desktop back to Default — the
+    // desktop being switched TO has its own resident instance.
+    bool g_switchingDesktop = false;
 
     bool IsVerifyChecked(void)
     {
@@ -53,21 +60,34 @@ namespace
         return _wcsicmp(desktopName.c_str(), currentName.c_str()) == 0;
     }
 
+    void LogInputDesktop(const wchar_t* context)
+    {
+        const std::wstring name = wilx::TryGetInputDesktopName();
+        if (name.empty())
+            LogError(std::format(L"{}: input desktop name unavailable", context), 0);
+        else
+            LogInfo(std::format(L"{}: input desktop '{}'", context, name));
+    }
+
     constexpr std::wstring_view ExecutableExtensions[] = { L".exe", L".com", L".pif", L".scr" };
 
-    void LaunchApplication(const std::wstring& applicationFilePath, const std::wstring& desktopName)
+    bool LaunchApplication(const std::wstring& applicationFilePath, const std::wstring& desktopName,
+        _Out_opt_ DWORD* processId = nullptr)
     {
+        if (processId)
+            *processId = 0;
+
         std::wstring extension = std::filesystem::path(applicationFilePath).extension();
         std::transform(extension.begin(), extension.end(), extension.begin(), ::towlower);
         if (std::find(std::begin(ExecutableExtensions), std::end(ExecutableExtensions), extension) == std::end(ExecutableExtensions))
         {
-            LogError(L"Invalid file extension", 0);
-            return;
+            LogError(L"[launch] invalid file extension", 0);
+            return false;
         }
 
         std::wstring directoryName = std::filesystem::path(applicationFilePath).parent_path().wstring();
 
-        LogInfo(std::format(L"launch '{}' on desktop '{}'", applicationFilePath, desktopName));
+        LogInfo(std::format(L"[launch] '{}' on desktop '{}'", applicationFilePath, desktopName));
 
         wil::unique_process_information processInfo;
         STARTUPINFOW sInfo = { 0 };
@@ -77,8 +97,14 @@ namespace
         if (!CreateProcessW(applicationFilePath.c_str(), NULL, NULL, NULL, TRUE,
                 NORMAL_PRIORITY_CLASS, NULL, directoryName.c_str(), &sInfo, &processInfo))
         {
-            LogError(L"CreateProcess failed", GetLastError());
+            LogError(L"[launch] CreateProcessW failed", GetLastError());
+            return false;
         }
+
+        LogInfo(std::format(L"[launch] pid {}", processInfo.dwProcessId));
+        if (processId)
+            *processId = processInfo.dwProcessId;
+        return true;
     }
 
     bool CreateDesktop(const std::wstring& desktopName)
@@ -92,27 +118,74 @@ namespace
         const std::vector<std::wstring> existingNames = GetDesktopNames();
         const bool alreadyExists = std::any_of(existingNames.begin(), existingNames.end(),
             [&desktopName](const std::wstring& existing) { return _wcsicmp(existing.c_str(), desktopName.c_str()) == 0; });
+        LogInfo(std::format(L"[create] '{}' duplicate check: {}, {} desktop(s) enumerated",
+            desktopName, alreadyExists ? L"pre-existing" : L"new", existingNames.size()));
 
         SECURITY_ATTRIBUTES sAttribute = { sizeof(SECURITY_ATTRIBUTES), NULL, TRUE };
         wil::unique_hdesk hNewDesktop(::CreateDesktopW(desktopName.c_str(), NULL, NULL, DF_ALLOWOTHERACCOUNTHOOK, GENERIC_ALL, &sAttribute));
         if (!hNewDesktop)
         {
             DWORD createError = GetLastError();
+            LogError(std::format(L"[create] CreateDesktopW('{}') failed", desktopName), createError);
             MessageBoxW(NULL, wilx::TryGetWin32ErrorMessage(createError).c_str(), TXT_MESSAGEBOX_TITLE, MB_ICONERROR | MB_TOPMOST | MB_TASKMODAL);
-            LogError(L"CreateDesktop failed", createError);
             return false;
         }
+        LogInfo(std::format(L"[create] CreateDesktopW('{}') succeeded", desktopName));
 
-        if (!alreadyExists)
+        // A pre-existing desktop already has its own shell; a new one only
+        // becomes usable once Explorer runs on it and pins it against
+        // destruction — an unseeded desktop renders black.
+        bool explorerSeeded = alreadyExists;
+        if (!explorerSeeded)
         {
             std::wstring windowsDirectory;
             if (FAILED(wil::GetWindowsDirectoryW(windowsDirectory)))
-                LogError(L"GetWindowsDirectory failed, skipping Explorer launch", GetLastError());
+            {
+                LogError(L"[create] GetWindowsDirectoryW failed", GetLastError());
+            }
             else
-                LaunchApplication(windowsDirectory + L"\\Explorer.Exe", desktopName);
+            {
+                DWORD explorerPid = 0;
+                if (LaunchApplication(windowsDirectory + L"\\Explorer.Exe", desktopName, &explorerPid) && explorerPid != 0)
+                {
+                    wil::unique_handle explorer(OpenProcess(SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, explorerPid));
+                    if (!explorer)
+                    {
+                        LogError(L"[create] OpenProcess(Explorer) failed, seeding state unknown", GetLastError());
+                        explorerSeeded = true;
+                    }
+                    else
+                    {
+                        // Explorer delegating to an existing shell exits right away,
+                        // which would leave this desktop black and unpinned.
+                        if (WaitForSingleObject(explorer.get(), 2000) == WAIT_OBJECT_0)
+                        {
+                            DWORD exitCode = 0;
+                            GetExitCodeProcess(explorer.get(), &exitCode);
+                            LogError(std::format(L"[create] Explorer exited within 2s (code {}), desktop would render black", exitCode), 0);
+                        }
+                        else
+                        {
+                            LogInfo(L"[create] Explorer alive 2s after launch, desktop pinned");
+                            explorerSeeded = true;
+                        }
+                    }
+                }
+            }
         }
 
-        LogInfo(std::format(L"desktop '{}' created", desktopName));
+        if (!explorerSeeded)
+        {
+            // Closing our handle destroys an unpinned desktop: never hand the
+            // user a black-screen desktop.
+            LogError(std::format(L"[create] desktop '{}' discarded (Explorer not seeded)", desktopName), 0);
+            MessageBoxW(NULL,
+                std::format(L"Could not start Explorer on desktop '{}'. The desktop was not created.", desktopName).c_str(),
+                TXT_MESSAGEBOX_TITLE, MB_ICONERROR | MB_TOPMOST | MB_TASKMODAL);
+            return false;
+        }
+
+        LogInfo(std::format(L"[create] desktop '{}' ready", desktopName));
         return true;
     }
 
@@ -171,7 +244,8 @@ namespace
         if (desktopName.empty())
             return;
 
-        LogInfo(std::format(L"switch to desktop '{}'", desktopName));
+        LogInfo(std::format(L"[switch] '{}'", desktopName));
+        LogInputDesktop(L"[switch] before");
 
         SetForegroundWindow(g_hDlg);
 
@@ -198,18 +272,29 @@ namespace
                     desktopName, wilx::TryGetWin32ErrorMessage(openError));
                 MessageBoxW(NULL, errorMsg.c_str(), TXT_MESSAGEBOX_TITLE, MB_ICONINFORMATION | MB_TOPMOST | MB_TASKMODAL);
             }
-            LogError(L"OpenDesktop failed", openError);
+            LogError(std::format(L"[switch] OpenDesktopW('{}') failed", desktopName), openError);
             return;
         }
 
         if (!::SwitchDesktop(hDesktopToSwitch.get()))
         {
-            LogError(L"SwitchDesktop failed", GetLastError());
+            LogError(L"[switch] SwitchDesktop failed", GetLastError());
             return;
         }
 
-        LaunchApplication(wil::GetModuleFileNameW<std::wstring>(nullptr), desktopName);
-        LogInfo(L"self relaunched on target desktop, this instance exits");
+        LogInputDesktop(L"[switch] after");
+
+        // The target desktop must end up with its own resident: if launching
+        // it fails, this instance is the last one able to undo the switch.
+        DWORD selfPid = 0;
+        if (!LaunchApplication(wil::GetModuleFileNameW<std::wstring>(nullptr), desktopName, &selfPid))
+        {
+            SwitchBackToDefault(L"self relaunch failed");
+            return;
+        }
+
+        LogInfo(std::format(L"[switch] self relaunched (pid {}), this instance exits", selfPid));
+        g_switchingDesktop = true;
         DestroyWindow(g_hDlg);
     }
 
@@ -370,11 +455,13 @@ namespace
 
         if (!AddTrayIcon(hDlg))
         {
-            LogError(L"failed to add tray icon");
+            LogError(L"[startup] failed to add tray icon");
             MessageBoxW(hDlg, L"Failed to set tray icon.", TXT_MESSAGEBOX_TITLE, MB_ICONINFORMATION | MB_TOPMOST | MB_TASKMODAL);
+            SwitchBackToDefault(L"tray icon failed");
             PostQuitMessage(-1);
             return;
         }
+        LogInfo(L"[startup] tray icon added");
 
         CheckDlgButton(hDlg, IDC_VERIFY_CHECK, BST_CHECKED);
 
@@ -438,8 +525,14 @@ namespace
             break;
 
         case WM_DESTROY:
-            LogInfo(L"instance exiting");
+            LogInfo(L"[exit] instance exiting");
             g_trayIcon.reset();
+            if (!g_switchingDesktop)
+            {
+                const std::wstring inputDesktop = wilx::TryGetInputDesktopName();
+                if (!inputDesktop.empty() && _wcsicmp(inputDesktop.c_str(), L"Default") != 0)
+                    SwitchBackToDefault(L"instance exiting");
+            }
             g_hDlg = nullptr;
             PostQuitMessage(0);
             break;
@@ -454,4 +547,19 @@ HWND CreateVirtualDesktopDialog(HINSTANCE hInstance)
     g_hInstance = hInstance;
     g_hDlg = CreateDialogParamW(hInstance, MAKEINTRESOURCEW(IDD_VIRTUALDESKTOP_DIALOG), nullptr, VirtualDesktopDlgProc, 0);
     return g_hDlg;
+}
+
+void SwitchBackToDefault(const wchar_t* reason)
+{
+    LogInfo(std::format(L"[bailout] ({}): switching input desktop back to Default", reason));
+    wil::unique_hdesk hDefault(OpenDesktopW(L"Default", 0, FALSE, DESKTOP_SWITCHDESKTOP));
+    if (!hDefault)
+    {
+        LogError(L"[bailout] OpenDesktopW(Default) failed", GetLastError());
+        return;
+    }
+    if (!::SwitchDesktop(hDefault.get()))
+        LogError(L"[bailout] SwitchDesktop(Default) failed", GetLastError());
+    else
+        LogInfo(L"[bailout] input desktop is now Default");
 }
