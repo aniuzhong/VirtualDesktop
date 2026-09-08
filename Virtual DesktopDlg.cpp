@@ -3,7 +3,6 @@
 #include "wilx/shell.h"
 #include "resource.h"
 #include "DesktopManager.h"
-#include "RegSettings.h"
 #include "Virtual DesktopDlg.h"
 
 static const UINT WM_TRAYICON_NOTIFY_MESSAGE = RegisterWindowMessageW(L"WM_TRAYICON_NOTIFY_MESSAGE-{8DDBE93E-DFE8-4279-934E-05C39902F37D}");
@@ -239,7 +238,6 @@ namespace
         else if (VERIFY_SWITCH_MENU_ID == iSelectedIndex)
         {
             CheckDlgButton(g_hDlg, IDC_VERIFY_CHECK, IsVerifyChecked() ? BST_UNCHECKED : BST_CHECKED);
-            RegSettings::SetProfileInt(REG_KEY_COMMON_SETTINGS, REG_SUB_KEY_CONFIRM_SWITCH, IsVerifyChecked() ? 1 : 0);
         }
         else if (iSelectedIndex >= static_cast<int>(CONTEXT_MENU_IDS))
         {
@@ -281,8 +279,7 @@ namespace
             return;
         }
 
-        CheckDlgButton(hDlg, IDC_VERIFY_CHECK,
-            RegSettings::ReadProfileInt(REG_KEY_COMMON_SETTINGS, REG_SUB_KEY_CONFIRM_SWITCH, 1) ? BST_CHECKED : BST_UNCHECKED);
+        CheckDlgButton(hDlg, IDC_VERIFY_CHECK, BST_CHECKED);
 
         LogInfo(std::format(L"initialized, {} desktop(s) available", DesktopManager::GetDesktopCount()));
     }
@@ -316,7 +313,6 @@ namespace
         case WM_COMMAND:
             switch (LOWORD(wParam))
             {
-            case IDOK:
             case IDCANCEL:
                 ShowWindow(g_hDlg, SW_HIDE);
                 return TRUE;
@@ -338,13 +334,6 @@ namespace
                 if (BN_CLICKED == HIWORD(wParam))
                 {
                     OnSwitchToDesktop();
-                    return TRUE;
-                }
-                break;
-            case IDC_VERIFY_CHECK:
-                if (BN_CLICKED == HIWORD(wParam))
-                {
-                    RegSettings::SetProfileInt(REG_KEY_COMMON_SETTINGS, REG_SUB_KEY_CONFIRM_SWITCH, IsVerifyChecked() ? 1 : 0);
                     return TRUE;
                 }
                 break;
