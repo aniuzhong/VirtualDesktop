@@ -6,6 +6,8 @@
 
 void SwitchBackToDefault(const wchar_t* reason);
 
+static const wchar_t RESIDENT_READY_EVENT[] = L"VirtualDesktop_{44D28BCA-7F46-4af2-A1FF-36EE0DAC7CD2}-resident-ready";
+
 static const UINT WM_TRAYICON_NOTIFY_MESSAGE = RegisterWindowMessageW(L"WM_TRAYICON_NOTIFY_MESSAGE-{8DDBE93E-DFE8-4279-934E-05C39902F37D}");
 
 namespace
@@ -72,7 +74,7 @@ namespace
     constexpr std::wstring_view ExecutableExtensions[] = { L".exe", L".com", L".pif", L".scr" };
 
     bool LaunchApplication(const std::wstring& applicationFilePath, const std::wstring& desktopName,
-        _Out_opt_ DWORD* processId = nullptr)
+        const std::wstring& arguments = L"", _Out_opt_ DWORD* processId = nullptr)
     {
         if (processId)
             *processId = 0;
@@ -94,7 +96,11 @@ namespace
         sInfo.cb = sizeof(sInfo);
         sInfo.lpDesktop = const_cast<LPWSTR>(desktopName.c_str());
 
-        if (!CreateProcessW(applicationFilePath.c_str(), NULL, NULL, NULL, TRUE,
+        std::wstring commandLine = L"\"" + applicationFilePath + L"\"";
+        if (!arguments.empty())
+            commandLine += L" " + arguments;
+
+        if (!CreateProcessW(applicationFilePath.c_str(), commandLine.data(), NULL, NULL, TRUE,
                 NORMAL_PRIORITY_CLASS, NULL, directoryName.c_str(), &sInfo, &processInfo))
         {
             LogError(L"[launch] CreateProcessW failed", GetLastError());
@@ -146,7 +152,7 @@ namespace
             else
             {
                 DWORD explorerPid = 0;
-                if (LaunchApplication(windowsDirectory + L"\\Explorer.Exe", desktopName, &explorerPid) && explorerPid != 0)
+                if (LaunchApplication(windowsDirectory + L"\\Explorer.Exe", desktopName, L"", &explorerPid) && explorerPid != 0)
                 {
                     wil::unique_handle explorer(OpenProcess(SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, explorerPid));
                     if (!explorer)
@@ -284,16 +290,70 @@ namespace
 
         LogInputDesktop(L"[switch] after");
 
-        // The target desktop must end up with its own resident: if launching
-        // it fails, this instance is the last one able to undo the switch.
-        DWORD selfPid = 0;
-        if (!LaunchApplication(wil::GetModuleFileNameW<std::wstring>(nullptr), desktopName, &selfPid))
+        // Launch the resident and verify it settles in: only once the resident
+        // reports a usable desktop (shell surface present) does this instance
+        // retire. Otherwise undo the switch — on a dead desktop input is gone,
+        // and this instance is the last resort able to undo the switch.
+        HANDLE readyEvent = CreateEventW(nullptr, TRUE, FALSE, RESIDENT_READY_EVENT);
+        if (!readyEvent)
         {
+            LogError(L"[switch] CreateEventW(resident-ready) failed", GetLastError());
+            SwitchBackToDefault(L"resident readiness event unavailable");
+            return;
+        }
+        ResetEvent(readyEvent);
+
+        DWORD selfPid = 0;
+        if (!LaunchApplication(wil::GetModuleFileNameW<std::wstring>(nullptr), desktopName, L"--reside", &selfPid))
+        {
+            CloseHandle(readyEvent);
             SwitchBackToDefault(L"self relaunch failed");
             return;
         }
+        LogInfo(std::format(L"[switch] self relaunched (pid {}), waiting for it to settle", selfPid));
 
-        LogInfo(std::format(L"[switch] self relaunched (pid {}), this instance exits", selfPid));
+        bool residentHealthy = false;
+        const DWORD waitStart = GetTickCount();
+        while (GetTickCount() - waitStart < 15000)
+        {
+            const DWORD waitResult = MsgWaitForMultipleObjects(1, &readyEvent, FALSE, 1000, QS_ALLINPUT);
+            if (waitResult == WAIT_OBJECT_0)
+            {
+                residentHealthy = true;
+                break;
+            }
+            if (waitResult == WAIT_OBJECT_0 + 1)
+            {
+                MSG msg;
+                while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE))
+                {
+                    TranslateMessage(&msg);
+                    DispatchMessageW(&msg);
+                }
+            }
+            // WAIT_TIMEOUT: keep waiting until the budget expires.
+        }
+        CloseHandle(readyEvent);
+
+        if (!residentHealthy)
+        {
+            // Undo the switch no matter what the resident is doing, then reap
+            // it if it never came up. This instance stays alive as the Default
+            // desktop's resident.
+            SwitchBackToDefault(L"resident did not confirm a healthy desktop");
+            wil::unique_handle resident(OpenProcess(SYNCHRONIZE | PROCESS_TERMINATE, FALSE, selfPid));
+            if (resident)
+            {
+                if (WaitForSingleObject(resident.get(), 3000) != WAIT_OBJECT_0)
+                {
+                    TerminateProcess(resident.get(), 1);
+                    LogWarn(L"[switch] resident terminated after failed hand-off");
+                }
+            }
+            return;
+        }
+
+        LogInfo(std::format(L"[switch] resident healthy (pid {}), this instance exits", selfPid));
         g_switchingDesktop = true;
         DestroyWindow(g_hDlg);
     }
@@ -462,6 +522,33 @@ namespace
             return;
         }
         LogInfo(L"[startup] tray icon added");
+
+        // A created desktop only becomes usable once its shell surface (the
+        // wallpaper host) exists; without it the desktop renders black and
+        // input is dead. Probe bounded and bail out to Default if absent.
+        bool shellFound = false;
+        for (int probe = 0; probe < 20 && !shellFound; ++probe)
+        {
+            if (FindWindowW(L"Progman", nullptr) || FindWindowW(L"WorkerW", nullptr))
+                shellFound = true;
+            else
+                Sleep(500);
+        }
+        LogInfo(std::format(L"[startup] shell surface probe: {}", shellFound ? L"found" : L"absent after 10s"));
+        if (!shellFound)
+        {
+            SwitchBackToDefault(L"no shell surface on target desktop");
+            g_trayIcon.reset();
+            PostQuitMessage(-1);
+            return;
+        }
+
+        if (HANDLE readyEvent = OpenEventW(EVENT_MODIFY_STATE, FALSE, RESIDENT_READY_EVENT))
+        {
+            SetEvent(readyEvent);
+            CloseHandle(readyEvent);
+            LogInfo(L"[startup] resident readiness signaled");
+        }
 
         CheckDlgButton(hDlg, IDC_VERIFY_CHECK, BST_CHECKED);
 
