@@ -1,59 +1,64 @@
-#include "pch.h"
-#include "ui_text.h"
-#include "dialog.h"
+#include <format>
+
+#include <wil/resource.h>
+
+#include "logging.h"
+#include "panel.h"
+#include "satellite.h"
+#include "wilx/win32_helpers.h"
 
 namespace
 {
-    HWND g_hMainDlg = nullptr;
+    constexpr wchar_t kMutexName[] =
+        L"Local\\VirtualDesktop_{44D28BCA-7F46-4af2-A1FF-36EE0DAC7CD2}";
+    constexpr wchar_t kGoHomeEvent[] =
+        L"Local\\VirtualDesktop_{44D28BCA-7F46-4af2-A1FF-36EE0DAC7CD2}-go-home";
 }
 
-int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
+int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 {
-    InitLogging();
-    LogInfo(std::format(L"==== virtual desktop starting, pid {} ====", GetCurrentProcessId()));
+    desktops::log::init();
+    desktops::log::info(std::format(L"==== starting, pid {} ====", GetCurrentProcessId()));
 
-    // Every instance holds the single-instance mutex for its entire lifetime —
-    // that is what makes the check enforce anything at all. A hand-off
-    // resident (--reside) sees "already exists" because the switcher still
-    // holds the mutex during the hand-off; it keeps a duplicate handle
-    // instead of exiting, so enforcement survives the switcher's retirement.
-    const wchar_t singleInstanceMutex[] = L"Virtual_Desktop_{44D28BCA-7F46-4af2-A1FF-36EE0DAC7CD2}";
+    // Session-scoped single instance. A second launch — from any desktop — is the
+    // go-home recall: signal the resident panel and exit.
     wil::unique_mutex_nothrow instanceMutex;
     bool alreadyExists = false;
-    const bool residentHandoff = std::wstring_view(GetCommandLineW()).find(L"--reside") != std::wstring_view::npos;
-    const bool created = instanceMutex.try_create(singleInstanceMutex, 0, MUTEX_ALL_ACCESS, nullptr, &alreadyExists);
-    const DWORD mutexError = GetLastError();
-    LogInfo(std::format(L"[startup] single-instance mutex: created={}, alreadyExists={}, hand-off={}",
-        created, alreadyExists, residentHandoff));
-
-    if (!created || (alreadyExists && !residentHandoff) || ERROR_ACCESS_DENIED == mutexError)
+    if (!instanceMutex.try_create(kMutexName, 0, MUTEX_ALL_ACCESS, nullptr, &alreadyExists))
     {
-        LogWarn(std::format(L"another instance is running (mutex error {}), exiting", mutexError));
-        MessageBoxW(nullptr, L"One instance of this application is already running.", ui::kTitle, MB_OK);
+        desktops::log::warn(std::format(L"mutex unavailable (error {}), exiting", GetLastError()));
+        return 0;
+    }
+    if (alreadyExists)
+    {
+        desktops::log::info(L"instance already running; signaling go-home");
+        wil::unique_handle goHome(OpenEventW(EVENT_MODIFY_STATE, FALSE, kGoHomeEvent));
+        if (goHome)
+            SetEvent(goHome.get());
         return 0;
     }
 
-    INITCOMMONCONTROLSEX initCtrls = { sizeof(initCtrls), ICC_WIN95_CLASSES };
-    InitCommonControlsEx(&initCtrls);
-
-    g_hMainDlg = CreateVirtualDesktopDialog(hInstance);
-    if (!g_hMainDlg)
+    // The panel lives on Default only. Launching from elsewhere is a refusal,
+    // never a relocation — the user sees the box on the desktop they are on.
+    const std::wstring threadDesktop = wilx::TryGetThreadDesktopName();
+    if (_wcsicmp(threadDesktop.c_str(), L"Default") != 0)
     {
-        LogError(L"[startup] dialog creation failed");
-        SwitchBackToDefault(L"dialog creation failed");
+        desktops::log::warn(std::format(L"launched on '{}', refusing", threadDesktop));
+        MessageBoxW(nullptr,
+            L"Virtual Desktop runs on the Default desktop.\nSwitch back to Default and start it there.",
+            L"Virtual Desktop", MB_ICONINFORMATION | MB_TOPMOST | MB_TASKMODAL);
+        return 0;
+    }
+
+    wil::unique_handle goHome(CreateEventW(nullptr, FALSE, FALSE, kGoHomeEvent));
+    if (!goHome)
+    {
+        desktops::log::error(L"[startup] go-home event creation failed", GetLastError());
         return -1;
     }
 
-    LogInfo(L"[startup] message loop running");
-    MSG msg = { 0 };
-    while (GetMessageW(&msg, nullptr, 0, 0) > 0)
-    {
-        if (!IsDialogMessageW(g_hMainDlg, &msg))
-        {
-            TranslateMessage(&msg);
-            DispatchMessageW(&msg);
-        }
-    }
-
-    return static_cast<int>(msg.wParam);
+    desktops::satellite::set_module(instance);
+    const int exitCode = desktops::panel::run(instance, goHome.get());
+    desktops::log::info(std::format(L"==== exiting with {} ====", exitCode));
+    return exitCode;
 }

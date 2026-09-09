@@ -4,22 +4,27 @@ configure_file(app.rc.in app.rc @ONLY)
 
 add_executable(VirtualDesktop WIN32
     main.cpp
-    dialog.cpp
+    panel.cpp
+    satellite.cpp
+    launcher.cpp
+    seed.cpp
+    common.cpp
     logging.cpp
-    dialog.h
+    panel.h
+    satellite.h
+    launcher.h
+    seed.h
+    common.h
     logging.h
-    ui_text.h
-    pch.h
     resource.h
     app.manifest
     "${CMAKE_CURRENT_BINARY_DIR}/app.rc"
 )
 target_include_directories(VirtualDesktop PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
-target_link_libraries(VirtualDesktop PRIVATE wilx spdlog::spdlog comctl32)
-target_precompile_headers(VirtualDesktop PRIVATE pch.h)
+target_link_libraries(VirtualDesktop PRIVATE wilx spdlog::spdlog shlwapi)
 target_compile_features(VirtualDesktop PRIVATE cxx_std_23)
 target_compile_definitions(VirtualDesktop PRIVATE UNICODE _UNICODE _WINDOWS)
-target_compile_options(VirtualDesktop PRIVATE /W4)
+target_compile_options(VirtualDesktop PRIVATE /W4 /utf-8)
 # The .rc embeds app.manifest (common controls v6, PerMonitorV2); letting the
 # linker also generate one would add a second, conflicting RT_MANIFEST resource.
 target_link_options(VirtualDesktop PRIVATE "/MANIFEST:NO")
